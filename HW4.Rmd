@@ -1,0 +1,22 @@
+---
+title: "HW4"
+author: "Jiaheng Cai"
+date: "10/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(KMsurv)
+library(survival)
+```
+
+# 4.6
+
+## (a)
+```{r}
+data(burn)
+```

@@ -1,0 +1,158 @@
+---
+title: "HW3"
+author: "Jiaheng Cai"
+date: "10/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(KMsurv)
+library(survival)
+library(ggplot2)
+library(ggfortify)
+```
+
+# 1
+## a
+
+```{r}
+data(bmt)
+AMLL = bmt[bmt$group == 2,]
+AMLH = bmt[bmt$group == 3,]
+
+kmfitL = survfit(Surv(t2, d3) ~ 1, AMLL)
+kmfitH = survfit(Surv(t2, d3) ~ 1, AMLH)
+
+summary(kmfitL)
+summary(kmfitH)
+```
+
+
+## b
+```{r}
+kmfitLAN = survfit(Surv(t2, d3) ~ 1, AMLL, ctype = 1)
+kmfitHAN = survfit(Surv(t2, d3) ~ 1, AMLH, ctype = 1)
+
+summary(kmfitLAN)
+summary(kmfitHAN)
+
+LHV = data.frame()
+LHV = cbind(kmfitLAN$time,kmfitLAN$cumhaz, sqrt(cumsum(kmfitLAN$n.event
+                                                       /(kmfitLAN$n.risk^2))),kmfitLAN$n.event)
+(LHV = LHV[LHV[,4] != 0,])
+
+HHV = data.frame()
+HHV = cbind(kmfitHAN$time,kmfitHAN$cumhaz, sqrt(cumsum(kmfitHAN$n.event
+                                                       /(kmfitHAN$n.risk^2))),kmfitHAN$n.event)
+(HHV = HHV[HHV[,4] != 0,])
+```
+
+
+## d
+```{r}
+print(kmfitL, print.rmean = TRUE, rmean = 2081)
+print(kmfitH, print.rmean = TRUE, rmean = 2081)
+```
+Thus the ci for low is:
+```{r}
+(1315-1.96*119)
+(1315+1.96*119)
+```
+
+for high is:
+```{r}
+(656-1.96*123)
+(656+1.96*123)
+```
+## e
+```{r}
+print(kmfitL, print.rmean = TRUE)
+print(kmfitH, print.rmean = TRUE)
+
+source(paste0('C:/Users/alexc/Desktop/215/', "bc_median_ci.R"))
+
+(bc.median.ci(kmfitL, table = TRUE, 'linear'))
+(bc.median.ci(kmfitL, table = TRUE, 'log'))
+(bc.median.ci(kmfitL, table = TRUE, 'asin'))
+
+(bc.median.ci(kmfitH, table = TRUE, 'linear'))
+(bc.median.ci(kmfitH, table = TRUE, 'log'))
+(bc.median.ci(kmfitH, table = TRUE, 'asin'))
+```
+
+## f
+```{r}
+source(paste0('C:/Users/alexc/Desktop/215/', "log_ci.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "arcsin_ci.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "LRci.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "SurvivalProb_boots.R"))
+
+
+(log.ci(kmfitL, alpha = 0.05))
+(log.ci(kmfitH, alpha = 0.05))
+
+(arcsin.ci(kmfitL, alpha = 0.05))
+(arcsin.ci(kmfitH, alpha = 0.05))
+
+(LRci.surv(kmfitL, t = 300))
+(LRci.surv(kmfitH, t = 300))
+```
+
+log:
+for lower data, ci:(0.642,	0.867)
+for higher data, ci:(0.278,	0.560)
+
+arcsin:
+for lower data, ci:(0.658,	0.878)
+for higher data, ci:(0.283,	0.568)
+
+bootstrap:
+```{r}
+SurvivalProb_boots(AMLL$t2, AMLL$d3, 300, plots = TRUE)
+SurvivalProb_boots(AMLH$t2, AMLH$d3, 300, plots = TRUE)
+```
+CI:
+lower: (0.6679041, 0.8876515)
+higher: (0.2828003, 0.5616441)
+
+
+
+## g
+```{r}
+source(paste0('C:/Users/alexc/Desktop/215/', "conf_bands.R"))
+cbands.region(kmfitL,100,400)
+cbands.region(kmfitH,100,400)
+
+cbands.interval(kmfitL, tL = 100, tU = 400, crit.value = 2.6853 ,type = 'linear', method = 'ep')
+cbands.interval(kmfitH, tL = 100, tU = 400, crit.value = 2.6651,type = 'linear', method = 'ep')
+
+
+cbands.interval(kmfitL, tL = 100, tU = 400, crit.value = 2.6853,type = 'log', method = 'ep')
+cbands.interval(kmfitH, tL = 100, tU = 400, crit.value = 2.6651,type = 'log', method = 'ep')
+
+cbands.interval(kmfitL, tL = 100, tU = 400, crit.value = 2.6853,type = 'asin', method = 'ep')
+cbands.interval(kmfitH, tL = 100, tU = 400, crit.value = 2.6651,type = 'asin', method = 'ep')
+```
+
+## h
+```{r}
+cbands.interval(kmfitL, tL = 100, tU = 400, crit.value = 1.0865,type = 'linear', method = 'hw')
+cbands.interval(kmfitH, tL = 100, tU = 400, crit.value = 1.3058,type = 'linear', method = 'hw')
+
+
+cbands.interval(kmfitL, tL = 100, tU = 400, crit.value = 1.0865,type = 'log', method = 'hw')
+cbands.interval(kmfitH, tL = 100, tU = 400, crit.value = 1.3058,type = 'log', method = 'hw')
+
+cbands.interval(kmfitL, tL = 100, tU = 400, crit.value = 1.0865,type = 'asin', method = 'hw')
+cbands.interval(kmfitH, tL = 100, tU = 400, crit.value = 1.3058,type = 'asin', method = 'hw')
+```
+
+## i
+
+AML low group have better survival experience than all group. And all group have better survival experience than high group. Analysis on mean, median, survival curve all support that. 
+
+
