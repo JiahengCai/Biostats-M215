@@ -1,0 +1,289 @@
+---
+title: "HW2"
+author: "Jiaheng Cai"
+date: "10/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(survival) 
+library(KMsurv)
+```
+
+## 3.6
+
+### (a)
+
+$$\begin{align*}
+L&\propto\prod_{i=1}^{n}f(T_i)^{\delta_i}S(T_i)^{1-\delta_i}\\
+&=\prod_{i=1}^n(\lambda e^{-\lambda T_i})^{\delta_i}(e^{-\lambda T_i})^{1-\delta_i}\\
+&=\lambda^{\sum_{i=1}^n\delta_i}e^{-\lambda\sum_{i=1}^nT_i}\\
+&=\lambda^6e^{-180\lambda}
+\end{align*}$$
+
+### (b)
+
+$$\begin{align*}
+L&\propto\prod_{i=1}^{n}f(T_i)^{\delta_i}S(T_i)^{1-\delta_i}\\
+&=\prod_{i=1}^n(\alpha\theta T_i^{\alpha -1}e^{-\theta T_i^\alpha})^{\delta_i}(e^{-\theta T_i^\alpha})^{1-\delta_i}\\
+&=(\alpha\theta)^4\prod_{i=1}^n
+(T_i^{\alpha -1})^{\delta_i}e^{-\theta \sum_{i=1}^n(T_i^\alpha)}\\
+&=(\alpha\theta)^4 (89100)^{\alpha -1}e^{-\theta (11^\alpha+12^\alpha+15^\alpha+33^\alpha+45^\alpha+28^\alpha+16^\alpha+17^\alpha+19^\alpha+30^\alpha)}
+\end{align*}$$
+
+### (c)
+
+$$\begin{align*}
+L&=\prod_{i=1}^n\frac{f(x_i^*)^{\delta_i}S(x_i^*)^{1-\delta_i}}{S(y_i^*)}\\
+&=\prod_{i=1}^n\frac{(\alpha\theta x_i^{\alpha -1})^{\delta_i}(e^{-\theta x_i^\alpha})^{\delta_i}(e^{-\theta x_i^\alpha})^{1-\delta_i}}{e^{-\theta y_i ^\alpha}}\\
+&=\frac{(\alpha \theta)^4 89100^{\alpha -1}e^{-\theta (11^\alpha+12^\alpha+15^\alpha+33^\alpha+45^\alpha+28^\alpha)}}{e^{-\theta(5^\alpha+8^\alpha+12^\alpha+24^\alpha+32^\alpha+17^\alpha)}}
+\end{align*}$$
+
+## 12.1
+
+### (a)
+
+```{r}
+data(tongue, package= "KMsurv")
+tongue1 = tongue[tongue$type == 1,]
+tongue2 = tongue[tongue$type == 2,]
+
+fit1 <- survreg(Surv(time, delta) ~ 1, data = tongue1, dist = "weibull")
+fit2 <- survreg(Surv(time, delta) ~ 1, data = tongue2, dist = "weibull")
+
+fit1e <- survreg(Surv(time, delta) ~ 1, data = tongue1, dist = "exponential")
+fit2e <- survreg(Surv(time, delta) ~ 1, data = tongue2, dist = "exponential")
+```
+
+lambdas and alphas
+```{r}
+mu1    <- fit1$coefficients[1]
+sigma1 <- fit1$scale
+
+(lambda1   <- exp(-mu1 / sigma1))
+(alpha1    <- 1 / sigma1)
+
+mu2    <- fit2$coefficients[1]
+sigma2 <- fit2$scale
+
+(lambda2   <- exp(-mu2 / sigma2))
+(alpha2    <- 1 / sigma2)
+```
+
+se lambda1, se alpha1, se lambda2, se alpha2
+```{r}
+varlm1 = exp(-2*mu1/sigma1)*(fit1[["var"]][1,1]/sigma1^2 + mu1^2*fit1[["var"]][2,2]/sigma1^2 -2*mu1*sigma1*fit1[["var"]][1,2]/sigma1^3)
+(sqrt(varlm1))
+
+(sealp1 = sqrt(fit1[["var"]][2,2]/sigma1^2))
+
+varlm2 = exp(-2*mu2/sigma2)*(fit2[["var"]][1,1]/sigma1^2 + mu2^2*fit2[["var"]][2,2]/sigma2^2 -2*mu2*sigma2*fit2[["var"]][1,2]/sigma2^3)
+(sqrt(varlm2))
+
+(sealp2 = sqrt(fit2[["var"]][2,2]/sigma2^2))
+```
+
+### (b)
+
+```{r}
+sqetw1 = ((alpha1 - 1)/sealp1)^2
+pchisq(sqetw1, 1, lower.tail = FALSE)
+
+sqetw2 = ((alpha2 - 1)/sealp2)^2
+pchisq(sqetw2, 1, lower.tail = FALSE)
+
+(pchisq(2*(fit1$loglik[1] - fit1e$loglik[1]), 1, lower.tail = FALSE))
+(pchisq(2*(fit2$loglik[1] - fit2e$loglik[1]), 1, lower.tail = FALSE))
+```
+### (c)
+
+$$\begin{align*}
+S(y)&=0.5\\
+e^{-e^{ \frac{(y- \mu ) }{ \sigma }}}&=0.5\\
+-e^{ \frac{(y- \mu ) }{ \sigma }} &=\log(0.5)\\
+\frac{(y- \mu ) }{ \sigma }&=\log(-\log(0.5))\\
+y&=\log(-\log(0.5))\sigma +\mu
+\end{align*}$$
+
+```{r}
+(exp(log(-log(0.5))*sigma1+mu1))
+(exp(log(-log(0.5))*sigma2+mu2))
+```
+
+By delta method:
+
+$$\sqrt{n}(g\begin{pmatrix}\widehat{\mu}\\\widehat{\sigma}\end{pmatrix}-g\begin{pmatrix}\mu_i\\\sigma_i\end{pmatrix})\stackrel{D}{\longrightarrow}N(0,g'\begin{pmatrix}\mu_i\\\sigma_i\end{pmatrix}\Sigma g'\begin{pmatrix}\mu_i\\\sigma_i\end{pmatrix}^T)$$
+```{r}
+gd1 = matrix(0,1,2)
+gd1[1,1] = exp(log(-log(0.5))*sigma1+mu1)
+gd1[1,2] = log(-log(0.5))*exp(log(-log(0.5))*sigma1+mu1)
+vcov1 = fit1$var
+vcov1[1,2] = vcov1[1,2]*sigma1
+vcov1[2,1] = vcov1[2,1]*sigma1
+vcov1[2,2] = vcov1[2,2]*sigma1^2
+
+sqrt(gd1%*%vcov1%*%t(gd1))
+
+gd2 = matrix(0,1,2)
+gd2[1,1] = exp(log(-log(0.5))*sigma2+mu2)
+gd2[1,2] = log(-log(0.5))*exp(log(-log(0.5))*sigma2+mu2)
+vcov2 = fit2$var
+vcov2[1,2] = vcov2[1,2]*sigma2
+vcov2[2,1] = vcov2[2,1]*sigma2
+vcov2[2,2] = vcov2[2,2]*sigma2^2
+
+sqrt(gd2%*%vcov2%*%t(gd2))
+```
+
+
+### (d)
+```{r}
+fita <- survreg(Surv(time, delta) ~ type, data = tongue, dist = "weibull")
+summary(fita)
+mua    <- fita$coefficients[1]
+betaa <- fita$coefficients[2]
+sigmaa <- fita$scale
+
+lambdaa   <- exp(-mua / sigmaa)
+alphaa    <- 1 / sigmaa
+```
+fail to reject h0 : type = 0 for both test
+
+RR is
+```{r}
+exp(betaa/sigmaa)
+```
+Again, by delta method:
+$$\sqrt{n}(g\begin{pmatrix}\widehat{\beta}\\\widehat{\sigma} \end{pmatrix}-g\begin{pmatrix}\beta_i\\\sigma_i\end{pmatrix})\stackrel{D}{\longrightarrow}N(0,g'\begin{pmatrix}\beta_i\\\sigma_i\end{pmatrix}\Sigma g'\begin{pmatrix}\beta_i\\\sigma_i\end{pmatrix}^T)$$
+```{r}
+gdra = matrix(0,1,2)
+gdra[1,1] = 1/sigmaa
+gdra[1,2] = -betaa/sigmaa^2
+vcovra = fita$var[-1,-1]
+vcovra[1,2] = vcovra[1,2]*sigmaa
+vcovra[2,1] = vcovra[2,1]*sigmaa
+vcovra[2,2] = vcovra[2,2]*sigmaa^2
+
+sqrt(gdra%*%vcovra%*%t(gdra))
+#CI low
+(exp(betaa/sigmaa-1.96*sqrt(gdra%*%vcovra%*%t(gdra))))
+#CI up
+(exp(betaa/sigmaa+1.96*sqrt(gdra%*%vcovra%*%t(gdra))))
+```
+
+AF is
+```{r}
+exp(betaa)
+```
+and CI is
+```{r}
+#CI low
+exp(betaa-1.96*0.351)
+#CI up
+exp(betaa+1.96*0.351)
+```
+The median lifetime for diploid patients is between 0.26 and 1.02 times that if aneuploid
+
+## 12.2
+
+### (a)
+
+```{r}
+data("kidney", package = "KMsurv")
+kidney1 = kidney[kidney$type == 1,]
+kidney2 = kidney[kidney$type == 2,]
+
+fitk1 <- survreg(Surv(time, delta) ~ 1, data = kidney1, dist = "weibull")
+fitk2 <- survreg(Surv(time, delta) ~ 1, data = kidney2, dist = "weibull")
+
+fitk1e <- survreg(Surv(time, delta) ~ 1, data = kidney1, dist = "exponential")
+fitk2e <- survreg(Surv(time, delta) ~ 1, data = kidney2, dist = "exponential")
+```
+
+```{r}
+muk1    <- fitk1$coefficients[1]
+sigmak1 <- fitk1$scale
+
+(lambdak1   <- exp(-muk1 / sigmak1))
+(alphak1    <- 1 / sigmak1)
+
+muk2    <- fitk2$coefficients[1]
+sigmak2 <- fitk2$scale
+
+(lambdak2   <- exp(-muk2 / sigmak2))
+(alphak2    <- 1 / sigmak2)
+```
+
+se lambda1, se alpha1, se lambda2, se alpha2
+```{r}
+varlmk1 = exp(-2*muk1/sigmak1)*(fitk1[["var"]][1,1]/sigmak1^2 + muk1^2*fitk1[["var"]][2,2]/sigmak1^2 -2*muk1*sigmak1*fitk1[["var"]][1,2]/sigmak1^3)
+(sqrt(varlmk1))
+
+(sealpk1 = sqrt(fitk1[["var"]][2,2]/sigmak1^2))
+
+varlmk2 = exp(-2*muk2/sigmak2)*(fitk2[["var"]][1,1]/sigmak2^2 + muk2^2*fitk2[["var"]][2,2]/sigmak2^2 -2*muk2*sigmak2*fitk2[["var"]][1,2]/sigmak2^3)
+(sqrt(varlmk2))
+
+(sealpk2 = sqrt(fitk2[["var"]][2,2]/sigmak2^2))
+```
+
+### (b)
+
+```{r}
+sqetwk1 = ((alphak1 - 1)/sealpk1)^2
+pchisq(sqetwk1, 1, lower.tail = FALSE)
+
+sqetwk2 = ((alphak2 - 1)/sealpk2)^2
+pchisq(sqetwk2, 1, lower.tail = FALSE)
+
+(pchisq(2*(fitk1$loglik[1] - fitk1e$loglik[1]), 1, lower.tail = FALSE))
+(pchisq(2*(fitk2$loglik[1] - fitk2e$loglik[1]), 1, lower.tail = FALSE))
+```
+
+### (d)
+```{r}
+fitka <- survreg(Surv(time, delta) ~ type, data = kidney, dist = "weibull")
+summary(fitka)
+muka    <- fitka$coefficients[1]
+betaka <- fitka$coefficients[2]
+sigmaka <- fitka$scale
+
+lambdaka   <- exp(-muka / sigmaka)
+alphaka    <- 1 / sigmaka
+```
+fail to reject h0:type = 0 for both test
+
+RR is
+```{r}
+exp(betaka/sigmaka)
+```
+
+
+```{r}
+gdrka = matrix(0,1,2)
+gdrka[1,1] = 1/sigmaka
+gdrka[1,2] = -betaka/sigmaka^2
+vcovrka = fitka$var[-1,-1]
+vcovrka[1,2] = vcovrka[1,2]*sigmaka
+vcovrka[2,1] = vcovrka[2,1]*sigmaka
+vcovrka[2,2] = vcovrka[2,2]*sigmaka^2
+
+sqrt(gdrka%*%vcovrka%*%t(gdrka))
+(exp(betaka/sigmaka-1.96*sqrt(gdrka%*%vcovrka%*%t(gdrka))))
+(exp(betaka/sigmaka+1.96*sqrt(gdrka%*%vcovrka%*%t(gdrka))))
+```
+
+AF is
+```{r}
+exp(betaka)
+```
+and CI is
+```{r}
+exp(betaka-1.96*0.469)
+exp(betaka+1.96*0.469)
+```
+The median lifetime for surgical patients is between 0.26 and 1.02 times that if percutaneous
