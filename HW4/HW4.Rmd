@@ -60,7 +60,7 @@ It seems propotional.
 print(kmfitPIAN, print.rmean = TRUE)
 print(kmfitCAN, print.rmean = TRUE)
 
-source(paste0('C:/Users/alexc/Desktop/215/', "bc_median_ci.R"))
+source(paste0('~/Biostats-M215/', "bc_median_ci.R"))
 
 (bc.median.ci(kmfitPIAN, table = TRUE, 'linear'))
 (bc.median.ci(kmfitPIAN, table = TRUE, 'log'))
@@ -74,10 +74,10 @@ median for cllride groip not avalaible.
 
 ## (d)
 ```{r}
-source(paste0('C:/Users/alexc/Desktop/215/', "log_ci.R"))
-source(paste0('C:/Users/alexc/Desktop/215/', "arcsin_ci.R"))
-source(paste0('C:/Users/alexc/Desktop/215/', "LRci.R"))
-source(paste0('C:/Users/alexc/Desktop/215/', "SurvivalProb_boots.R"))
+source(paste0('~/Biostats-M215/', "log_ci.R"))
+source(paste0('~/Biostats-M215/', "arcsin_ci.R"))
+source(paste0('~/Biostats-M215/', "LRci.R"))
+source(paste0('~/Biostats-M215/', "SurvivalProb_boots.R"))
 
 
 (log.ci(kmfitPIAN, alpha = 0.05))
@@ -94,7 +94,7 @@ asin: PI(0.626	0.834), c (0.774	0.923)
 
 ## (e)
 ```{r}
-source(paste0('C:/Users/alexc/Desktop/215/', "conf_bands.R"))
+source(paste0('~/Biostats-M215/', "conf_bands.R"))
 cbands.region(kmfitPIAN,8,20)
 cbands.region(kmfitCAN,8,20)
 
@@ -224,7 +224,7 @@ for (i in 1:nrow(matrix3)) {
     matrix3$y[i] = matrix3$incI[i]
     }
   else{
-    matrix3$y[i] = matrix3$y[i-1] +matrix3$incI[i]-matrix3$d[i]-matrix3$censorI[i-1]
+    matrix3$y[i] = matrix3$y[i-1] +matrix3$incI[i]-matrix3$d[i-1]-matrix3$censorI[i]
   }
   }
 
