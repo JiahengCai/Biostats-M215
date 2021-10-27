@@ -198,23 +198,33 @@ for (i in 1:23) {
 data(psych)
 psych$agec = psych$age + psych$time
 matrix5 = data.frame()
-matrix5 = cbind(sort(psych$age),rep(0,nrow(psych)))
-colnames(matrix5) = c('age','death')
-matrix6 = cbind(psych$agec,psych$death)
+matrix5 = cbind(sort(psych$age),rep(0,nrow(psych)),rep(0,nrow(psych)),rep(1,nrow(psych)))
+matrix6 = cbind(psych$agec,psych$death,rep(0,nrow(psych)),rep(0,nrow(psych)))
+for (i in 1:nrow(matrix6)){
+  if(matrix6[i,2] == 0){
+    matrix6[i,3] = 1
+  }
+}
 matrix5 = rbind(matrix5,matrix6)
 matrix5 = as.data.frame(matrix5[order(matrix5[,1]),])
-matrix3 = cbind(sort(unique(matrix5$age)),tapply(matrix5$death, matrix5$age, sum),table(matrix5$age))
+
+colnames(matrix5) = c('age','d','censorI','incI')
+
+matrix3 = cbind(sort(unique(matrix5$age)),tapply(matrix5$d, matrix5$age, sum),table(matrix5$age)
+                ,tapply(matrix5$censorI, matrix5$age, sum),tapply(matrix5$incI, matrix5$age, sum))
+
 matrix3 = as.data.frame(matrix3[order(matrix3[,1]),])
 
 rownames(matrix3) = c(1:nrow(matrix3))
-colnames(matrix3) = c('age','d','sum')
+colnames(matrix3) = c('age','d','sum','censorI','incI')
+
 
 for (i in 1:nrow(matrix3)) {
   if(i == 1){
-    matrix3$y[i] = matrix3$sum[i]
+    matrix3$y[i] = matrix3$incI[i]
     }
   else{
-    matrix3$y[i] = matrix3$y[i-1] +matrix3$sum[i]-matrix3$d[i-1]
+    matrix3$y[i] = matrix3$y[i-1] +matrix3$incI[i]-matrix3$d[i]-matrix3$censorI[i-1]
   }
   }
 
