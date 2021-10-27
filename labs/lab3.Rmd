@@ -166,7 +166,7 @@ First we will create a function to calculate the bootstrapped standard error. A 
 
  
 ```{r}
-source(paste0(data_directory, "quantile_boots.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "quantile_boots.R"))
 ```
 
 We will use the Example 7.9 on page 224. The data is not in ```KMsurv``` so manual entry in required :(
@@ -210,7 +210,7 @@ quantile_boots(t1, c1, 0.5, R = 1000, plots = T)
 
 ## estimate S(t) and its standard error using bootstrap method 
 ```{r}
-source(paste0(data_directory, "SurvivalProb_boots.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "SurvivalProb_boots.R"))
 ```
 
 ```{r}
@@ -227,7 +227,7 @@ As disucssed in class one may use a likelihood ratio type confidence interval. T
 Using the ALL group for the ```bmt``` dataset and being interested in $S(365)$ we will try to find a $95\%$ confidence interval using the likelihood ratio approach.
 
 ```{r}
-source(paste0(data_directory, "LRci.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "LRci.R"))
 
 my.surv <- survfit(Surv(bmt$t2[bmt$group==1], bmt$d3[bmt$group==1])~1, conf.type = 'none')
 
