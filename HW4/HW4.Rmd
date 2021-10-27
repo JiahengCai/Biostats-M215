@@ -49,11 +49,11 @@ CHV = cbind(kmfitCAN$time,kmfitCAN$cumhaz,
 (CHV = CHV[CHV[,4] != 0,])
 
 plot(kmfitPIAN, cumhaz=TRUE)
-plot(kmfitCAN, cumhaz=TRUE)
+lines(kmfitCAN, cumhaz=TRUE)
 
 ```
 
-It seems propotional.
+It seems not proportional.
 
 ## (c)
 ```{r}
@@ -66,11 +66,10 @@ source(paste0('~/Biostats-M215/', "bc_median_ci.R"))
 (bc.median.ci(kmfitPIAN, table = TRUE, 'log'))
 (bc.median.ci(kmfitPIAN, table = TRUE, 'asin'))
 
-# (bc.median.ci(kmfitCAN, table = TRUE, 'linear'))
-# (bc.median.ci(kmfitCAN, table = TRUE, 'log'))
-# (bc.median.ci(kmfitCAN, table = TRUE, 'asin'))
+(bc.median.ci(kmfitCAN, table = TRUE, 'linear'))
+(bc.median.ci(kmfitCAN, table = TRUE, 'log'))
+(bc.median.ci(kmfitCAN, table = TRUE, 'asin')) #modified function
 ```
-median for cllride groip not avalaible. 
 
 ## (d)
 ```{r}
@@ -85,9 +84,6 @@ source(paste0('~/Biostats-M215/', "SurvivalProb_boots.R"))
 
 (arcsin.ci(kmfitPIAN, alpha = 0.05))
 (arcsin.ci(kmfitCAN, alpha = 0.05))
-
-(LRci.surv(kmfitPIAN, t = 10))
-(LRci.surv(kmfitCAN, t = 10))
 ```
 log:PI:(0.614,	0.825) c:(0.761	0.916)
 asin: PI(0.626	0.834), c (0.774	0.923)
@@ -106,7 +102,7 @@ cbands.interval(kmfitPIAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'log', me
 cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'log', method = 'ep')
 
 cbands.interval(kmfitPIAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'asin', method = 'ep')
-cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'asin', method = 'ep')
+cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'asin', method = 'ep') #modified
 ```
 
 ## (f)
@@ -224,10 +220,10 @@ for (i in 1:nrow(matrix3)) {
     matrix3$y[i] = matrix3$incI[i]
     }
   else{
-    matrix3$y[i] = matrix3$y[i-1] +matrix3$incI[i]-matrix3$d[i-1]-matrix3$censorI[i]
+    matrix3$y[i] = matrix3$y[i-1] +matrix3$incI[i]-matrix3$d[i-1]-matrix3$censorI[i-1]
   }
   }
-
+matrix3
 plot(matrix3$age,matrix3$y)
 
 
@@ -235,40 +231,71 @@ plot(matrix3$age,matrix3$y)
 
 ## (b)
 ```{r}
+data(psych)
+psych$death[psych$age < 30] = 0
+psych$agec = psych$age + psych$time
+matrix5 = data.frame()
+matrix5 = cbind(sort(psych$age),rep(0,nrow(psych)),rep(0,nrow(psych)),rep(1,nrow(psych)))
+matrix6 = cbind(psych$agec,psych$death,rep(0,nrow(psych)),rep(0,nrow(psych)))
+for (i in 1:nrow(matrix6)){
+  if(matrix6[i,2] == 0){
+    matrix6[i,3] = 1
+  }
+}
+matrix5 = rbind(matrix5,matrix6)
+matrix5 = as.data.frame(matrix5[order(matrix5[,1]),])
+
+colnames(matrix5) = c('age','d','censorI','incI')
+
+matrix3 = cbind(sort(unique(matrix5$age)),tapply(matrix5$d, matrix5$age, sum),table(matrix5$age)
+                ,tapply(matrix5$censorI, matrix5$age, sum),tapply(matrix5$incI, matrix5$age, sum))
+
+matrix3 = as.data.frame(matrix3[order(matrix3[,1]),])
+rownames(matrix3) = c(1:nrow(matrix3))
+colnames(matrix3) = c('age','d','sum','censorI','incI')
+for (i in 1:nrow(matrix3)) {
+  if(i == 1){
+    matrix3$y[i] = matrix3$incI[i]
+    }
+  else{
+    matrix3$y[i] = matrix3$y[i-1] +matrix3$incI[i]-matrix3$d[i-1]-matrix3$censorI[i-1]
+  }
+  }
 matrix3$ydd = matrix3$y-matrix3$d
 
 for (i in 1:nrow(matrix3)) {
-  if(matrix3$age[i] >29){
+  if(matrix3$age[i] >30){
     matrix3$s29[i] = matrix3$s29[i-1]*matrix3$ydd[i]/matrix3$y[i]
   }
   else{
     matrix3$s29[i] =1
   }
 }
+matrix3
 ```
 
 # 7.2
 ## (a)
 ```{r}
 data("alloauto")
-
-timevar <- alloauto$time[alloauto$type == 1]
-delta   <- alloauto$delta[alloauto$type == 1]
-
-null_surv <- exp(-0.045 * timevar) #Expected survival probability
-
+timevar <- alloauto$time[alloauto$type == 2]
+delta   <- alloauto$delta[alloauto$type == 2]
+null_surv <- exp(-0.045 * timevar)
 survdiff(Surv(timevar, delta) ~ offset(null_surv))
 rm(timevar, delta, null_surv)
 ```
+pv = 0.0933 implies non-significance.
 
 # 7.4
 ## (a)
 
 ```{r}
 data(tongue, package = "KMsurv")
-
-#Log-Rank Test (W = 1)
 survdiff(Surv(time, delta) ~ type, data = tongue, rho = 0)
+```
+
+## (b)
+```{r}
 survdiff(Surv(time, delta) ~ type, data = tongue, rho = 1)
 ```
 
@@ -276,7 +303,6 @@ survdiff(Surv(time, delta) ~ type, data = tongue, rho = 1)
 ```{r}
 data("kidtran")
 survdiff(Surv(time, delta) ~ gender + race, data = kidtran)
-
 ```
 
 

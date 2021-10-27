@@ -1,11 +1,11 @@
 bc.median.ci <- function(surv.object, type = "linear", alpha = 0.05, table = FALSE) {
 
-  if((min(surv.object$surv) < 0.5) == FALSE) {
-    stop("Estimate for median survival time does not exist. Can not compute
-         confidence interval.")
-  }
+  # if((min(surv.object$surv) < 0.5) == FALSE) {
+  #   stop("Estimate for median survival time does not exist. Can not compute
+  #        confidence interval.")
+  # }
   
-  median.est <- min(surv.object$time[surv.object$surv == max(surv.object$surv[surv.object$surv - 0.5 <= 0])])
+  # median.est <- min(surv.object$time[surv.object$surv == max(surv.object$surv[surv.object$surv - 0.5 <= 0])])
   
   surv.est <- surv.object$surv
   se.surv  <- surv.object$std.err * surv.est
@@ -26,20 +26,20 @@ bc.median.ci <- function(surv.object, type = "linear", alpha = 0.05, table = FAL
   res <- data.frame(time = surv.object$time, surv = surv.object$surv, z = zScore)
  
   #- Finding limits
-  LL <- ifelse(max(zScore) < qnorm(1 - alpha / 2),
-         NA, max(min(surv.object$time[zScore <  qnorm(1 - alpha / 2)])))
-  
-  UL <- ifelse(min(zScore) > -qnorm(1 - alpha / 2),
-               NA, min(max(surv.object$time[zScore > -qnorm(1 - alpha / 2)])))
+  # LL <- ifelse(max(zScore) < qnorm(1 - alpha / 2),
+  #        NA, max(min(surv.object$time[zScore <  qnorm(1 - alpha / 2)])))
+  # 
+  # UL <- ifelse(min(zScore) > -qnorm(1 - alpha / 2),
+  #              NA, min(max(surv.object$time[zScore > -qnorm(1 - alpha / 2)])))
   
   results <- list()
-  results$median <- round(median.est, 3)
-  results$lower  <- ifelse(is.na(LL), NA, round(LL, 3))
-  results$upper  <- ifelse(is.na(UL), NA, round(UL, 3))
+  # results$median <- round(median.est, 3)
+  # results$lower  <- ifelse(is.na(LL), NA, round(LL, 3))
+  # results$upper  <- ifelse(is.na(UL), NA, round(UL, 3))
   results$type   <- type
   results$alpha  <- alpha
   if(table == TRUE) results$table  <- round(res[surv.object$n.censor == 0, ], 3)
   
-  return(results)
+  return(round(res[surv.object$n.event != 0, ], 3))
 }
 
