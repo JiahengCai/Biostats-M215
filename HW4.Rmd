@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(KMsurv)
 library(survival)
+library(dplyr)
 ```
 
 # 4.6
@@ -19,4 +20,253 @@ library(survival)
 ## (a)
 ```{r}
 data(burn)
+burnPI = burn[burn$Z1 == 0,]
+burnC = burn[burn$Z1 == 1,]
+
+kmfitPI = survfit(Surv(T3, D3) ~ 1, burnPI)
+kmfitC = survfit(Surv(T3, D3) ~ 1, burnC)
+
+summary(kmfitPI)
+summary(kmfitC)
 ```
+
+## (b)
+```{r}
+kmfitPIAN = survfit(Surv(T3, D3) ~ 1, burnPI, ctype = 1)
+kmfitCAN = survfit(Surv(T3, D3) ~ 1, burnC, ctype = 1)
+
+summary(kmfitPIAN)
+summary(kmfitCAN)
+
+PIHV = data.frame()
+PIHV = cbind(kmfitPIAN$time,kmfitPIAN$cumhaz, 
+             sqrt(cumsum(kmfitPIAN$n.event/(kmfitPIAN$n.risk^2))),kmfitPIAN$n.event)
+(PIHV = PIHV[PIHV[,4] != 0,])
+
+CHV = data.frame()
+CHV = cbind(kmfitCAN$time,kmfitCAN$cumhaz, 
+            sqrt(cumsum(kmfitCAN$n.event/(kmfitCAN$n.risk^2))),kmfitCAN$n.event)
+(CHV = CHV[CHV[,4] != 0,])
+
+plot(kmfitPIAN, cumhaz=TRUE)
+plot(kmfitCAN, cumhaz=TRUE)
+
+```
+
+It seems propotional.
+
+## (c)
+```{r}
+print(kmfitPIAN, print.rmean = TRUE)
+print(kmfitCAN, print.rmean = TRUE)
+
+source(paste0('C:/Users/alexc/Desktop/215/', "bc_median_ci.R"))
+
+(bc.median.ci(kmfitPIAN, table = TRUE, 'linear'))
+(bc.median.ci(kmfitPIAN, table = TRUE, 'log'))
+(bc.median.ci(kmfitPIAN, table = TRUE, 'asin'))
+
+# (bc.median.ci(kmfitCAN, table = TRUE, 'linear'))
+# (bc.median.ci(kmfitCAN, table = TRUE, 'log'))
+# (bc.median.ci(kmfitCAN, table = TRUE, 'asin'))
+```
+median for cllride groip not avalaible. 
+
+## (d)
+```{r}
+source(paste0('C:/Users/alexc/Desktop/215/', "log_ci.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "arcsin_ci.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "LRci.R"))
+source(paste0('C:/Users/alexc/Desktop/215/', "SurvivalProb_boots.R"))
+
+
+(log.ci(kmfitPIAN, alpha = 0.05))
+(log.ci(kmfitCAN, alpha = 0.05))
+
+(arcsin.ci(kmfitPIAN, alpha = 0.05))
+(arcsin.ci(kmfitCAN, alpha = 0.05))
+
+(LRci.surv(kmfitPIAN, t = 10))
+(LRci.surv(kmfitCAN, t = 10))
+```
+log:PI:(0.614,	0.825) c:(0.761	0.916)
+asin: PI(0.626	0.834), c (0.774	0.923)
+
+## (e)
+```{r}
+source(paste0('C:/Users/alexc/Desktop/215/', "conf_bands.R"))
+cbands.region(kmfitPIAN,8,20)
+cbands.region(kmfitCAN,8,20)
+
+cbands.interval(kmfitPIAN, tL = 8, tU = 20, crit.value = 2.5245 ,type = 'linear', method = 'ep')
+cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'linear', method = 'ep')
+
+
+cbands.interval(kmfitPIAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'log', method = 'ep')
+cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'log', method = 'ep')
+
+cbands.interval(kmfitPIAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'asin', method = 'ep')
+cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 2.5245,type = 'asin', method = 'ep')
+```
+
+## (f)
+
+```{r}
+cbands.region(kmfitPIAN,8,20)
+cbands.region(kmfitCAN,8,20)
+
+cbands.interval(kmfitPIAN, tL = 8, tU = 20, crit.value = 0.9247 ,type = 'linear', method = 'hw')
+cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 0.9247,type = 'linear', method = 'hw')
+
+
+cbands.interval(kmfitPIAN, tL = 8, tU = 20, crit.value = 0.9247,type = 'log', method = 'hw')
+cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 0.9247,type = 'log', method = 'hw')
+
+cbands.interval(kmfitPIAN, tL = 8, tU = 20, crit.value = 0.9247,type = 'asin', method = 'hw')
+cbands.interval(kmfitCAN, tL = 8, tU = 20, crit.value = 0.9247,type = 'asin', method = 'hw')
+```
+
+## (g)
+the expected lifetime for chlorhexidine group is better than the routine method.
+
+# 4.7
+## (a)
+
+```{r}
+age = c(58:80)
+y = c(2,3,5,6,9,10,10,10,10,12,13,14,13,12,12,11,9,7,7,5,4,3,1)
+d = c(0,0,1,0,1,1,0,2,1,0,2,2,2,2,2,1,1,0,1,1,0,0,0)
+ydd = y-d
+
+matrix = as.data.frame(cbind(age,y,d,ydd))
+```
+
+## (b)
+```{r}
+for (i in 1:23) {
+  if(matrix$age[i] >59){
+    matrix$s60[i] = matrix$s60[i-1]*matrix$ydd[i]/matrix$y[i]
+  }
+  else{
+    matrix$s60[i] =1
+  }
+}
+```
+
+## (c)
+```{r}
+for (i in 1:23) {
+  if(matrix$age[i] >69){
+    matrix$s70[i] = matrix$s70[i-1]*matrix$ydd[i]/matrix$y[i]
+  }
+  else{
+    matrix$s70[i] =1
+  }
+}
+```
+
+## (d)
+```{r}
+yw = c(30,30,30,29,29,28,27,27,25,24,24,22,18,16,14,11,9,7,7,5,4,3,1)
+yddw = yw-d
+matrix1 = as.data.frame(cbind(age,yw,d,yddw))
+
+for (i in 1:23) {
+  if(matrix1$age[i] >59){
+    matrix1$s60[i] = matrix1$s60[i-1]*matrix1$yddw[i]/matrix1$yw[i]
+  }
+  else{
+    matrix1$s60[i] =1
+  }
+}
+
+for (i in 1:23) {
+  if(matrix1$age[i] >69){
+    matrix1$s70[i] = matrix1$s70[i-1]*matrix1$yddw[i]/matrix1$yw[i]
+  }
+  else{
+    matrix1$s70[i] =1
+  }
+}
+```
+
+# 4.8
+
+## (a)
+
+```{r}
+data(psych)
+psych$agec = psych$age + psych$time
+matrix5 = data.frame()
+matrix5 = cbind(sort(psych$age),rep(0,nrow(psych)))
+colnames(matrix5) = c('age','death')
+matrix6 = cbind(psych$agec,psych$death)
+matrix5 = rbind(matrix5,matrix6)
+matrix5 = as.data.frame(matrix5[order(matrix5[,1]),])
+matrix3 = cbind(sort(unique(matrix5$age)),tapply(matrix5$death, matrix5$age, sum),table(matrix5$age))
+matrix3 = as.data.frame(matrix3[order(matrix3[,1]),])
+
+rownames(matrix3) = c(1:nrow(matrix3))
+colnames(matrix3) = c('age','d','sum')
+
+for (i in 1:nrow(matrix3)) {
+  if(i == 1){
+    matrix3$y[i] = matrix3$sum[i]
+    }
+  else{
+    matrix3$y[i] = matrix3$y[i-1] +matrix3$sum[i]-matrix3$d[i-1]
+  }
+  }
+
+plot(matrix3$age,matrix3$y)
+
+
+```
+
+## (b)
+```{r}
+matrix3$ydd = matrix3$y-matrix3$d
+
+for (i in 1:nrow(matrix3)) {
+  if(matrix3$age[i] >29){
+    matrix3$s29[i] = matrix3$s29[i-1]*matrix3$ydd[i]/matrix3$y[i]
+  }
+  else{
+    matrix3$s29[i] =1
+  }
+}
+```
+
+# 7.2
+## (a)
+```{r}
+data("alloauto")
+
+timevar <- alloauto$time[alloauto$type == 1]
+delta   <- alloauto$delta[alloauto$type == 1]
+
+null_surv <- exp(-0.045 * timevar) #Expected survival probability
+
+survdiff(Surv(timevar, delta) ~ offset(null_surv))
+rm(timevar, delta, null_surv)
+```
+
+# 7.4
+## (a)
+
+```{r}
+data(tongue, package = "KMsurv")
+
+#Log-Rank Test (W = 1)
+survdiff(Surv(time, delta) ~ type, data = tongue, rho = 0)
+survdiff(Surv(time, delta) ~ type, data = tongue, rho = 1)
+```
+
+# 7.9
+```{r}
+data("kidtran")
+survdiff(Surv(time, delta) ~ gender + race, data = kidtran)
+
+```
+
+
