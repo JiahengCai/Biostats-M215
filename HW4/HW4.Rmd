@@ -5,8 +5,17 @@ date: "10/25/2021"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r setup}
 knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+os <- sessionInfo()$running
+
+if (str_detect(os, "Ubuntu")) {
+  path <- '~/Biostats-M215/'
+} 
+if(str_detect(os, "Windows")){
+  path <- "C:/Users/alexc/Desktop/215/Biostats-M215/"
+}
 ```
 
 ```{r}
@@ -60,7 +69,7 @@ It seems not proportional.
 print(kmfitPIAN, print.rmean = TRUE)
 print(kmfitCAN, print.rmean = TRUE)
 
-source(paste0('~/Biostats-M215/', "bc_median_ci.R"))
+source(paste0(path, "bc_median_ci.R"))
 
 (bc.median.ci(kmfitPIAN, table = TRUE, 'linear'))
 (bc.median.ci(kmfitPIAN, table = TRUE, 'log'))
@@ -73,11 +82,8 @@ source(paste0('~/Biostats-M215/', "bc_median_ci.R"))
 
 ## (d)
 ```{r}
-source(paste0('~/Biostats-M215/', "log_ci.R"))
-source(paste0('~/Biostats-M215/', "arcsin_ci.R"))
-source(paste0('~/Biostats-M215/', "LRci.R"))
-source(paste0('~/Biostats-M215/', "SurvivalProb_boots.R"))
-
+source(paste0(path, "log_ci.R"))
+source(paste0(path, "arcsin_ci.R"))
 
 (log.ci(kmfitPIAN, alpha = 0.05))
 (log.ci(kmfitCAN, alpha = 0.05))
@@ -90,7 +96,7 @@ asin: PI(0.626	0.834), c (0.774	0.923)
 
 ## (e)
 ```{r}
-source(paste0('~/Biostats-M215/', "conf_bands.R"))
+source(paste0(path, "conf_bands.R"))
 cbands.region(kmfitPIAN,8,20)
 cbands.region(kmfitCAN,8,20)
 
@@ -134,7 +140,7 @@ y = c(2,3,5,6,9,10,10,10,10,12,13,14,13,12,12,11,9,7,7,5,4,3,1)
 d = c(0,0,1,0,1,1,0,2,1,0,2,2,2,2,2,1,1,0,1,1,0,0,0)
 ydd = y-d
 
-matrix = as.data.frame(cbind(age,y,d,ydd))
+(matrix = as.data.frame(cbind(age,y,d,ydd)))
 ```
 
 ## (b)
@@ -147,6 +153,7 @@ for (i in 1:23) {
     matrix$s60[i] =1
   }
 }
+matrix
 ```
 
 ## (c)
@@ -159,6 +166,7 @@ for (i in 1:23) {
     matrix$s70[i] =1
   }
 }
+matrix
 ```
 
 ## (d)
@@ -184,6 +192,7 @@ for (i in 1:23) {
     matrix1$s70[i] =1
   }
 }
+matrix1
 ```
 
 # 4.8
