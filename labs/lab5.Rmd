@@ -1,0 +1,102 @@
+---
+title: "Lab 5"
+author: "Shanpeng Li"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Stratified Tests While Adjusting for Covariates
+Another test of interest is to compare the hazard rates of two (or more) populations while adjusting for some other covariate(s). In such cases, a regression framework would be more appealing since these models generally account for multiple confounding covariates. This will be discussed later.
+
+However, for adjusting with one covariate, we can simply use existing output. Let's look at Example 7.7 on pg. 220.
+
+**Note:** There are typos in the book and dataset in ```R```. The 23rd subject should have entries (2, 1, 176, 1, 80, 38) and $Z$ should be 0.36 with a $p$-value of $.718$! 
+
+Suppose we were intrested in testing the null hypothesis of no difference in the leukemia-free survival rate between graft type (allogenic, autologous) while adjusting for the patient's disease state (Non-Hodgkins, Hodgkins). 
+
+```{r}
+library(survival)
+library(KMsurv)
+data(hodg)
+
+head(hodg)
+hodg[23, ] <- c(2, 1, 176, 1, 80, 38)
+
+#Looking only at NHL
+survdiff(Surv(time, delta) ~ gtype, data = hodg, subset = (dtype == 1))
+
+#Looking at Hodgkin's Patients
+survdiff(Surv(time, delta) ~ gtype, data = hodg, subset = (dtype == 2))
+```
+As we can see, marginally Hodgkin's disease has a test statistic of 2.89 ($p < 0.05$) and the NHL as a test statistic of 1.26 ($p > 0.1$). 
+
+```{r}
+#Looking at treatment while controlling for disease type
+survdiff(Surv(time, delta) ~ gtype + strata(dtype), data = hodg)
+```
+However, the results become insignificant when we stratify on disease. 
+
+## Median Comparison for Two-Sample Right-Censored Survival Data using the Control Median Test
+
+As mentioned earlier, one can test whether two samples have the same median survival time using a $Z$-test. Here, we will look at an alternative through bootstrapping. Below is code on how to use the ```quantileControlTest``` in the ```controlTest``` package. We will look at Example 7.9.
+
+```{r, fig.align = "center"}
+library(controlTest)
+t1 <- c(1, 63, 105, 129, 182, 216, 250, 262, 301, 301,
+       342, 354, 356, 358, 380, 383, 383, 338, 394, 408, 
+       460, 489, 499, 523, 524, 535, 562, 569, 675, 676, 
+       748, 778, 786, 797, 955, 968, 1000, 1245, 1271, 1420, 
+       1551, 1694, 2363, 2754, 2950)
+t2 <- c(17, 42, 44, 48, 60, 72, 74, 95, 103, 108, 122, 144, 
+       167, 170, 183, 185, 193, 195, 197, 208, 234, 235, 254, 
+       307, 315, 401, 445, 464, 484, 528, 542, 547, 577, 580, 
+       795, 855, 1366, 1577, 2060, 2412, 2486, 2796, 2802, 2934, 2988)
+c1 <- c(rep(1, 43), 0, 0)
+c2 <- c(rep(1, 39), rep(0, 6))
+quantileControlTest(t1, c1, t2, c2, B = 1000, plots = TRUE) #R = number of bootstrap samples
+```
+
+## Cox's Proportional Hazards Model (Section 8.1 - 8.2)
+One of the most common models used in survival analysis is Cox's proportional hazards model. Assuming that the covariates are time-invariant, a concept we will go over later in class, the Cox model aims to model the conditional hazard function through
+$$h(t|\mathbf{x}) = h_{0}(t) \exp(\mathbf{x}^T\boldsymbol{\beta}),$$
+where $h_{0}(t)$ is an unspecified baseline hazard function, $\boldsymbol{\beta} = (\beta_1, \ldots, \beta_p)$ is an unknown vector of regression coefficients, and $\mathbf{x}$ is a $p$-dimensional covariate vector. Cox's partial likelihood method estimates $\boldsymbol{\beta}$ through maximizing the log-partial likelihood. Alternate log-partial likelihoods exist in the presence of ties. Numerical optimization is used to find the maximum partial likelihood estimates (MPLE).
+
+It is very straightforward to implement in both ```R``` and ```SAS```. In ```R```, we would use the ```coxph``` function and the syntax is similar to that of ```lm```.
+
+Let us look at Example 8.1 from K&M. We will use the ```btrial``` dataset from the textbook.
+
+```{r}
+#Example 8.1 (pg. 247)
+data(btrial)
+head(btrial)
+fit <- coxph(Surv(time, death) ~ im, data = btrial)
+summary(fit)
+```
+### Interpretation
+How would we interpret the coefficient estimates from a Cox model? Let's take a look at the example above. Our covariate vector, $\mathbf{x}$, is coded as 1 = negative immunohistochemical response and 2 = positive immunohistochemical response. Let us look at the following ratio,
+$$
+\frac{h(t|\mathbf{x} = 2)}{h(t|\mathbf{x} = 1)} = \frac{h_0(t)\exp(\hat{\beta}_1 * 2)}{h_0(t)\exp(\hat{\beta}_1 * 1)} = \exp(2\hat{\beta}_1 - \hat{\beta}_1) = \exp(\hat{\beta}_1).
+$$
+Therefore, $\exp(\hat{\beta}_1)$ is defined as the ratio of two conditional hazards. In otherwords, *the conditional hazard of a subject with a positive immunohistochemical response is $\exp(0.98) \approx 2.67$ that of the conditional hazard of a subject with a negative immunohistochemical response.*
+
+Note that the interpretation is in terms of hazards, which are defined as 
+$$
+h(t) = \lim_{\Delta t \to 0} \frac{\Pr(t \leq T \leq t + \Delta t | T \geq t)}{\Delta t}.
+$$
+Try explaining this to a layman. Thus, most reserchers replace the word hazard with the word *risk*. Now $\exp(\hat{\beta})$ can be seen as a measure of relative risk, which may be easier to understand/explain. However, it is important to know that although there is a change in terminology, the underlying quantity is not a probability (as risk is usually defined). 
+
+Note: For this example immunohistochemical response was coded as $\{1, 2\}$. The HR and interpretation will not change if we convert this to $\{0, 1\}$.
+
+### Extracting Values
+Let us see what we can extract for our ```fit``` variable.
+```{r}
+logLik(fit)
+coef(fit)
+vcov(fit)
+```
+Important information we can extract include the log-partial likelihood (```logLik```), variance-covariance matrix (```vcov```), and coefficient estimates (```coef```). 
+ 

@@ -1,0 +1,71 @@
+---
+title: "HW5"
+author: "Jiaheng Cai"
+date: "11/4/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(survival)
+library(KMsurv)
+```
+
+# 7.9 (c)
+```{r}
+data(kidtran)
+survdiff(Surv(time, delta) ~ race, data = kidtran, subset = (gender == 1))
+survdiff(Surv(time, delta) ~ race, data = kidtran, subset = (gender == 2))
+```
+racial difference is significant for female case, but not in male case.
+
+```{r}
+survdiff(Surv(time, delta) ~ race + strata(gender), data = kidtran)
+```
+racial difference is insignificant in stratified test. 
+
+# 8.1
+
+## (a)
+
+c2 = NHL Auto
+c3 = HOD Allo
+c4 = HOD Auto
+
+```{r}
+data(hodg)
+hodg$c2 = rep(0,nrow(hodg))
+hodg$c3 = rep(0,nrow(hodg))
+hodg$c4 = rep(0,nrow(hodg))
+hodg$c2[hodg$dtype == 1 & hodg$gtype == 2] = 1
+hodg$c3[hodg$dtype == 2 & hodg$gtype == 1] = 1
+hodg$c4[hodg$dtype == 2 & hodg$gtype == 2] = 1
+```
+
+## (b)
+
+gtypeb:
+allo = 0
+auto = 1
+
+dtypeb:
+NHL = 0
+HOD = 1
+
+int = gtypeb* dtypeb
+```{r}
+hodg$gtypeb = ifelse(hodg$gtype == 1,0,1)
+hodg$dtypeb = ifelse(hodg$dtype == 1,0,1)
+hodg$int = hodg$gtypeb* hodg$dtypeb
+```
+
+## (c)
+
+$$
+\begin{align*}
+exp(\beta_1) &= \frac{h(t|NHL  \ auto)}{h(t|NHL \ allo)}\\&=exp(1.5)\\
+exp(\beta_2) &= \frac{h(t|HOD  \ allo)}{h(t|NHL \ allo)}\\&=exp(2)\\
+exp(\beta_{1,1-0,0}) &= \frac{h(t|HOD  \ auto)}{h(t|NHL \ allo)}\\&=exp(0.5)
+\end{align*}\\
+\implies\beta_1 = 1.5, \beta_2 = 2,\beta_3 = \beta_{1,1-0,0}-\beta_1-\beta_2 = 0.5-2-1.5 = -3
+$$
