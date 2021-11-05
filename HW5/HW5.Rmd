@@ -66,6 +66,7 @@ $$
 exp(\beta_1) &= \frac{h(t|NHL  \ auto)}{h(t|NHL \ allo)}\\&=exp(1.5)\\
 exp(\beta_2) &= \frac{h(t|HOD  \ allo)}{h(t|NHL \ allo)}\\&=exp(2)\\
 exp(\beta_{1,1-0,0}) &= \frac{h(t|HOD  \ auto)}{h(t|NHL \ allo)}\\&=exp(0.5)
-\end{align*}\\
-\implies\beta_1 = 1.5, \beta_2 = 2,\beta_3 = \beta_{1,1-0,0}-\beta_1-\beta_2 = 0.5-2-1.5 = -3
+\\
+&\implies\beta_1 = 1.5, \beta_2 = 2,\beta_3 = \beta_{1,1-0,0}-\beta_1-\beta_2 = 0.5-2-1.5 = -3
+\end{align*}
 $$
