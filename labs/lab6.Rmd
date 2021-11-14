@@ -1,0 +1,171 @@
+---
+title: "M215 Lab 6"
+author: "Shanpeng Li"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning = FALSE}
+library(survival)
+library(KMsurv)
+```
+
+### Handling Ties (Section 8.4)
+We can also modify how ```coxph``` handles ties through the ```ties``` option. By default ```R``` implements Efron's approximation, although the Breslow method is quite popular in other standard statistical software. Each method may yield subtle differences in the log-partial likelihood; which in turn affects the coefficient estimates, covariance matrix, and so on. Below is an example to compare such differences.
+
+```{r}
+# Example 8.4
+data(kidney, package = "KMsurv")
+head(kidney)
+length(kidney$time[kidney$delta == 1])
+length(unique(kidney$time[kidney$delta == 1]))
+
+fit.efron   <- coxph(Surv(time, delta) ~ type, data = kidney)
+fit.breslow <- coxph(Surv(time, delta) ~ type, data = kidney, ties = "breslow")
+fit.exact   <- coxph(Surv(time, delta) ~ type, data = kidney, ties = "exact")
+
+cbind(fit.efron$coefficients, fit.breslow$coefficients, fit.exact$coefficients)
+```
+As we can see, all three methods are quite similar in the presence of ties. When there are no ties, all three methods would yield the same result.
+
+## Hypothesis Testing  (Section 8.5)
+We will use the ```larynx``` dataset. 
+```{r}
+#Example 8.2
+data(larynx, package = "KMsurv")
+head(larynx)
+#Create dummy variables for stage variable (s2, s3, s4)
+larynx$s2 <- ifelse(larynx$stage == 2, 1, 0)
+larynx$s3 <- ifelse(larynx$stage == 3, 1, 0)
+larynx$s4 <- ifelse(larynx$stage == 4, 1, 0)
+
+#Only looking stage
+fit.larynx <- coxph(Surv(time, delta) ~ factor(stage) , 
+                    data = larynx, ties = 'breslow')
+
+fit.larynx
+
+#Adding age to the stages.
+fit.larynx2 <- coxph(Surv(time, delta) ~ factor(stage) + age, 
+                     data = larynx, ties = 'breslow')
+
+fit.larynx2
+```
+
+### Score, Likelihood Ratio, and Wald Tests
+Continuing with the ```larynx``` example, suppose we are interested in testing the hypothesis $H_0: \beta_1 = \beta_2 = \beta_3 = 0$. Therefore, we are testing no difference in survival between the different stages. We will show now how to implement the score, likelihood ratio, and Wald tests manually through R for this hypothesis. 
+
+Performing the score test is rather involved. We would need to calculate the estimate of $\beta_4$ under the null hypothesis. 
+```{r}
+#Example 8.2 (pg. 264)
+
+#Score Test
+fit.age  <- coxph(Surv(time, delta) ~ age, data = larynx, ties = 'breslow')
+age.coef <- fit.age$coefficients
+```
+We now need to fit our model using the 'null' estimates and extract the score statistic. 
+```{r}
+fit.new <- update(fit.larynx2, iter.max = 0, init = c(0, 0, 0, age.coef)) #Updates model with NEW initial values.
+
+X2.sc <- fit.new$score 
+round(cbind(X2.sc, 1 - pchisq(X2.sc, 3)), 4)
+```
+For the likelihood ratio tests, we can extract the two log-partial likelihoods using ```$loglik[2]```. Note that the second element in ```loglik``` corresponds to the log-partial likelihood of the fitted model, while the first element is the log-partial likelihood of the null model. 
+```{r}
+#Likelihood Ratio Test
+X2.lrt <- 2 * (fit.larynx2$loglik[2] - fit.age$loglik[2])
+round(cbind(X2.lrt, 1-pchisq(X2.lrt, 3)), 4)
+```
+The Wald is also very easy to implement. We can get the variance-covariance matrix through ```$var```. For good practice we define ```b.null```, where $$H_0: \beta = b.null$$. In our example, $b.null = (0, 0, 0)$.
+```{r}
+#Wald Test
+b.null <- c(0, 0, 0)
+X2.wald <- t(fit.larynx2$coefficients[1:3] - b.null) %*% 
+  solve(fit.larynx2$var[-4, -4]) %*% 
+  (fit.larynx2$coefficients[1:3] - b.null)
+round(cbind(X2.wald, 1-pchisq(X2.wald, 3)), 4)
+```
+
+### General Tests Using Wald
+The Wald test is actually more flexible. We can define a contrast $C$ to test the null, $H_0: C\beta = C\beta_0$. The Wald test can be writte as:
+$$(Cb - C\beta_0)'[C\Sigma C']^{-1}(Cb-C\beta_0) \sim \chi^2(q),$$
+where $q$ is the row rank of $C$ and $q \leq p$.
+
+Testing $H_0: \beta_1 = 0$
+```{r}
+#Testing b1 = 0
+C  <- c(1, 0, 0, 0)
+b0 <- c(0, 0, 0, 0)
+b  <- fit.larynx2$coefficients
+V  <- fit.larynx2$var
+t(C %*% b - C %*% b0) %*% solve(t(C) %*% V %*% C) %*% 
+  (C %*% b - C %*% b0)
+
+fit.larynx2
+```
+Testing $H_0: \beta_1 = \beta_2 = \beta_3$.
+```{r}
+#Testing b1 = b2 = b3
+C  <- rbind(c(1, -1, 0, 0), c(0, -1, 1, 0))
+b0 <- c(0, 0, 0, 0)
+t(C %*% b - C %*% b0) %*% solve(C %*% V %*% t(C)) %*% 
+  (C %*% b - C %*% b0)
+
+```
+
+## Baseline Hazard and Estimation of Survival Function (Section 8.8)
+Recall the Cox PH model formulation,
+$$h(t|\mathbf{x}) = h_{0}(t) \exp(\mathbf{x}^T\boldsymbol{\beta}).$$
+After we estimate $\beta$, it may be of interest to calculate survival probabilities for a new subject. To do so, we would need an estimate of $h_0(t)$, or rather $H_0(t)$. Breslow's estimator of the baseline cumulative hazard, $\hat{H}_0(t)$ is generally used and can be easily implemented in ```R``` through ```basehaz```. Setting ```centered = F``` allows us to estimate the cumulative hazard when $\mathbf{x_i} = 0$. Hence provided that the all covariate values are 0,
+$$\hat{S}_0(t) = \exp[-\hat{H}_0(t)].$$ Below is an example using the ```larynx``` dataset where our covariates are the stages of disease and age at diagnosis.
+
+```{r, fig.align = 'center'}
+b.haz <- basehaz(fit.larynx2, centered = F)
+t     <- b.haz[ ,2]
+S.est <- cbind(exp(-b.haz[,1]), t)
+```
+Suppose now that we are interested in estimate the survival probability given a set of covariates, $\mathbf{x_0}$. Then,
+$$\hat{S}(t|\mathbf{x_0}) = \hat{S}_0(t)^{\exp(\mathbf{x_0}^T\hat{\beta})}.$$
+To continue with our example, let us look at the estimated survival probabilities of a patient that is age 60 at diagnosis for each stage. This can be easily implemented in ```R```.
+```{r, fig.align = 'center'}
+b.est <- fit.larynx2$coefficients
+
+S1 <- S.est[,1]^(exp(t(b.est) %*% c(0, 0, 0, 60)))
+S2 <- S.est[,1]^(exp(t(b.est) %*% c(1, 0, 0, 60)))
+S3 <- S.est[,1]^(exp(t(b.est) %*% c(0, 1, 0, 60)))
+S4 <- S.est[,1]^(exp(t(b.est)%*% c(0, 0, 1, 60)))
+
+plot(S1 ~ t, type = 's', xlim = c(0, 10), ylim = c(0, 1),
+     main = 'Est. Survival Functions For a 60 Year Old \n Fig 8.3',
+     ylab = 'Est. Survival Function', xlab = 'Time')
+lines(S2 ~ t, type = 's', lty = 2, col = 2)
+lines(S3 ~ t, type = 's', lty = 3, col = 3)
+lines(S4 ~ t, type = 's', lty = 4, col = 4)
+legend('bottomleft', 
+       c('Stage 1 Age 60', 'Stage 2 Age 60', 'Stage 3 Age 60', 'Stage 4 Age 60'), 
+       col = 1:4, lty = 1:4, bty = 'n', cex = .85)
+```
+If we are interested in estimating the 5-year survival probability, we can easily do so. 
+```{r}
+res <- cbind(S1[max(which(t <= 5))], S2[max(which(t <= 5))], 
+             S3[max(which(t <= 5))], S4[max(which(t <= 5))])
+rownames(res) <- c('Est. Surv.')
+colnames(res) <- c('Stage 1', 'Stage 2', 'Stage 3', 'Stage 4')
+round(res, 3)
+```
+
+Sometimes, we are interested in calculating a confidence interval for the estimated survival probability. Fortunately, under certain regularity conditions, the estimated survival probability is asymptotically normal. However, the variance is not easy to find. Luckily, ```survival``` has a nice feature that allows us to extract the estimate, standard error, and confidence interval for each observed event time given a set of covariates using the ```survfit``` command and a fitted Cox model through ```coxph```. The set of covariates must be in the form of a data frame with variable names equal to those in the model. Different transformations, and confidence levels can be specified. 
+```{r}
+fit.s1 <- survfit(fit.larynx2, newdata = data.frame(stage = 1, age = 60), 
+                  se.fit = TRUE, conf.int = .95, conf.type = 'log-log')
+
+summary(fit.s1)
+
+fit.s2 <- survfit(fit.larynx2, data.frame(stage = 2, age = 60), 
+                  se.fit = TRUE, conf.int = .95, conf.type = 'log-log')
+
+summary(fit.s2)
+```
