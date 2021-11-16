@@ -296,7 +296,7 @@ S4 <- S.est[,1]^(exp(t(b.est)%*% c(0, 0, 1)))
 S5 <- S.est[,1]^(exp(t(b.est)%*% c(1, 0, 1)))
 S6 <- S.est[,1]^(exp(t(b.est)%*% c(0, 1, 1)))
 
-plot(S1 ~ t, type = 's', xlim = c(0, 3000), ylim = c(0, 1),
+plot(S1 ~ t, type = 's', xlim = c(0, 3000), ylim = c(0.6, 1),
      main = 'Est. Survival Functions',
      ylab = 'Est. Survival Function', xlab = 'Time')
 lines(S2 ~ t, type = 's', lty = 2, col = 2)
