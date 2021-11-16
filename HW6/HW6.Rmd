@@ -66,8 +66,11 @@ round(cbind(wald, 1-pchisq(wald, 2)), 4)
 
 ## (d)
 ```{r}
-c(rr = exp(fit.breslow$coef %*% c(-1,1)), CI=exp(2*(fit.breslow$coef %*%
-c(-1,1) + c(-1,1)*1.96*sqrt(c(-1,1) %*% fit.breslow$var %*% c(-1,1)))))
+rr = exp(fit.breslow$coef[2]-fit.breslow$coef[1])
+var = fit.breslow[["var"]][1,1]+fit.breslow[["var"]][2,2]-2*fit.breslow[["var"]][1,2]
+
+exp(fit.breslow$coef[2]-fit.breslow$coef[1]-1.96*sqrt(var))
+exp(fit.breslow$coef[2]-fit.breslow$coef[1]+1.96*sqrt(var))
 ```
 
 ## (e)(f)
@@ -138,7 +141,14 @@ hodg$int = hodg$gtypeb* hodg$dtypeb
 
 ```{r}
 fit.hodg = coxph(Surv(time, delta) ~ c2 + c3 + c4, data = hodg, ties = "breslow")
-summary(fit.hodg)
+table = summary(fit.hodg)
+table = cbind(table[["coefficients"]],table[["coefficients"]][,4]^2)
+colnames(table)[6] = 'chisq'
+table
+```
+
+Not sure, but put ANODE in this HW
+```{r}
 anova(fit.hodg)
 ```
 
@@ -146,6 +156,10 @@ anova(fit.hodg)
 ```{r}
 fit.hodgb = coxph(Surv(time, delta) ~ gtypeb + dtypeb + int, data = hodg, ties = "breslow")
 summary(fit.hodgb)
+table = summary(fit.hodgb)
+table = cbind(table[["coefficients"]],table[["coefficients"]][,4]^2)
+colnames(table)[6] = 'chisq'
+table
 anova(fit.hodgb)
 ```
 
@@ -190,6 +204,15 @@ round(cbind(wald, 1-pchisq(wald, 1)), 4) #1 or 2 df?
 ```
 
 ## (e)
+```{r}
+C  <- rbind(c(1,0,0),c(0,1,-1))
+b0 <- c(0, 0,0)
+b  <- fit.hodg$coefficients
+V  <- fit.hodg$var
+wald = t(C %*% b - C %*% b0) %*% solve((C) %*% V %*% t(C)) %*% 
+  (C %*% b - C %*% b0)
+round(cbind(wald, 1-pchisq(wald, 2)), 4)
+```
 
 # 8.10
 ## (a)
@@ -201,77 +224,102 @@ summary(fit.bmt)
 
 ## (b) ???
 ```{r}
-fit.group  <- coxph(Surv(ta, da) ~ group, data = bmt, ties = 'breslow')
-group.coef <- fit.group$coefficients
+(fit.group  <- coxph(Surv(ta, da) ~ factor(group) + z10, data = bmt, ties = 'breslow'))
+fit.groupb  <- coxph(Surv(ta, da) ~ factor(group), data = bmt, ties = 'breslow')
 ```
 
 ```{r}
-X2.lrt <- 2 * (fit.bmt$loglik[2] - fit.group$loglik[2])
+group.coef <- fit.group$coefficients
+
+X2.lrt <- 2 * (fit.group$loglik[2] - fit.groupb$loglik[2])
 round(cbind(X2.lrt, 1-pchisq(X2.lrt, 1)), 4)
 
 
-b.null <- c(0)
-X2.wald <- t(fit.bmt$coefficients[1] - b.null) %*% 
-  solve(fit.bmt$var[-4, -4]) %*% 
-  (fit.bmt$coefficients[1] - b.null)
-round(cbind(X2.wald, 1-pchisq(X2.wald, 1)), 4)
-
-fit.bmtG = coxph(Surv(ta, da) ~ z10 + group, data = bmt, ties = "breslow")
-summary(fit.bmtG)
+C  <- c(0,0,1)
+b0 <- c(0,0,0)
+b  <- group.coef
+V  <- fit.group$var
+wald = t(C %*% b - C %*% b0) %*% solve(t(C) %*% V %*% (C)) %*% 
+  (C %*% b - C %*% b0)
+round(cbind(wald, 1-pchisq(wald, 1)), 4)
 ```
 
 ## (c)
 ```{r}
-bmt$ind = bmt$group * bmt$z10
-fit.bmtI = coxph(Surv(ta, da) ~ z10 + group+ind, data = bmt, ties = "breslow")
+fit.bmtI = coxph(Surv(ta, da) ~ z10 + factor(group)+factor(group)*z10, data = bmt, ties = "breslow")
 summary(fit.bmtI)
+
+C  <- rbind(c(0,0,0,1,0),c(0,0,0,0,1))
+b0 <- c(0,0,0,0,0)
+b  <- fit.bmtI$coefficients
+V  <- fit.bmtI$var
+wald = t(C %*% b - C %*% b0) %*% solve((C) %*% V %*% t(C)) %*% 
+  (C %*% b - C %*% b0)
+round(cbind(wald, 1-pchisq(wald, 2)), 4)
 ```
 
 ## (d)
 ```{r}
-fit.bmtd = coxph(Surv(ta, da) ~ z1 + z3+z5+z8+z7+I(group==2)+I(group++3)+z10, data = bmt, ties = "breslow")
+fit.bmtd = coxph(Surv(ta, da) ~ z1 + z2+z1*z2+z3+z4+z3*z4+z5+z6+z5*z6+z8+z7+factor(group)+z10, data = bmt, ties = "breslow")
 summary(fit.bmtd)
+step(fit.bmtd)
+```
 
-rr = exp(fit.bmtd$coef[8])
+```{r}
+(best.fit = coxph(Surv(ta, da) ~ z1 + z6 + factor(group) + z10, 
+    data = bmt, ties = "breslow"))
+summary(best.fit)
 
-exp(-0.6230812-1.96*0.5015323)
-exp(-0.6230812+1.96*0.5015323)
+C  <- c(0,0,0,0,1)
+b0 <- c(0,0,0,0,0)
+b  <- best.fit$coefficients
+V  <- best.fit$var
+wald = t(C %*% b - C %*% b0) %*% solve(t(C) %*% V %*% (C)) %*% 
+  (C %*% b - C %*% b0)
+round(cbind(wald, 1-pchisq(wald, 1)), 4)
 ```
 
 # 8.14
 ## (a)
 ```{r}
-group1 = bmt[bmt$group == 1,]
-group2 = bmt[bmt$group == 2,]
-group3 = bmt[bmt$group == 3,]
+fit.group  <- coxph(Surv(ta, da) ~ factor(group) + z10, data = bmt, ties = 'breslow')
 
-fit.groupz101  <- coxph(Surv(ta, da) ~ z10, data = group1, ties = 'breslow')
-fit.groupz102  <- coxph(Surv(ta, da) ~ z10, data = group2, ties = 'breslow')
-fit.groupz103  <- coxph(Surv(ta, da) ~ z10, data = group3, ties = 'breslow')
-
-b.haz <- basehaz(fit.groupz101, centered = F)
+b.haz <- basehaz(fit.group, centered = F)
 t     <- b.haz[ ,2]
 S.est <- cbind(exp(-b.haz[,1]), t)
-S.est
+b.est <- fit.group$coefficients
 
-b.haz2 <- basehaz(fit.groupz102, centered = F)
-t2     <- b.haz2[ ,2]
-S.est2 <- cbind(exp(-b.haz2[,1]), t2)
-S.est2
+S1 <- S.est[,1]^(exp(t(b.est) %*% c(0, 0, 0)))
+S2 <- S.est[,1]^(exp(t(b.est) %*% c(1, 0, 0)))
+S3 <- S.est[,1]^(exp(t(b.est) %*% c(0, 1, 0)))
+S4 <- S.est[,1]^(exp(t(b.est)%*% c(0, 0, 1)))
+S5 <- S.est[,1]^(exp(t(b.est)%*% c(1, 0, 1)))
+S6 <- S.est[,1]^(exp(t(b.est)%*% c(0, 1, 1)))
 
-b.haz3 <- basehaz(fit.groupz103, centered = F)
-t3     <- b.haz3[ ,2]
-S.est3 <- cbind(exp(-b.haz3[,1]), t3)
-S.est3
+plot(S1 ~ t, type = 's', xlim = c(0, 3000), ylim = c(0, 1),
+     main = 'Est. Survival Functions',
+     ylab = 'Est. Survival Function', xlab = 'Time')
+lines(S2 ~ t, type = 's', lty = 2, col = 2)
+lines(S3 ~ t, type = 's', lty = 3, col = 3)
+lines(S4 ~ t, type = 's', lty = 4, col = 4)
+lines(S5 ~ t, type = 's', lty = 4, col = 4)
+lines(S6 ~ t, type = 's', lty = 4, col = 4)
+legend('bottomleft', 
+       c('S1', 'S2', 'S3', 'S4','S5','S6'), 
+       col = 1:4, lty = 1:4, bty = 'n', cex = .85)
 ```
 
 ## (b)
 ```{r}
-fit.trtgroup <- coxph(Surv(ta, da) ~ group+z10, data = bmt, ties = 'breslow')
-fit.s1 <- survfit(fit.trtgroup, newdata = data.frame(group = 3, z10 = 1), 
+fit.s1 <- survfit(fit.group, newdata = data.frame(group = 3, z10 = 0), 
                   se.fit = TRUE, conf.int = .95, conf.type = 'log-log')
 
 summary(fit.s1)
+
+fit.s2 <- survfit(fit.group, newdata = data.frame(group = 3, z10 = 1), 
+                  se.fit = TRUE, conf.int = .95, conf.type = 'log-log')
+
+summary(fit.s2)
 ```
 
 
