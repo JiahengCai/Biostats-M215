@@ -1,0 +1,569 @@
+---
+title: "M215Lab7"
+author: "Shanpeng Li"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning = FALSE}
+library(survival)
+library(KMsurv)
+```
+## Variable selcetion for Cox regression
+```{r}
+## backward selection
+lung <- survival::lung
+lung <- na.omit(lung)
+lung$status1 <- ifelse(lung$status == 2, 0, 1)
+fit <- coxph(Surv(time, status1) ~ meal.cal + wt.loss + inst + age + sex + ph.ecog +
+              ph.karno + pat.karno, data = lung)
+fit.backward <- MASS::stepAIC(fit, direction = "backward")
+summary(fit.backward)
+AIC(fit.backward)
+```
+
+```{r}
+## forward selection
+fit <- coxph(Surv(time, status1) ~ meal.cal + wt.loss + inst, data = lung)
+fit.forward <- MASS::stepAIC(fit, direction = "forward", 
+               scope=list(lower=~meal.cal + wt.loss + inst,
+                          upper=~ meal.cal + wt.loss + inst + age + sex + ph.ecog +
+               ph.karno + pat.karno), trace = TRUE)
+summary(fit.forward)
+AIC(fit.forward)
+```
+
+```{r}
+## stepwise selection
+fit <- coxph(Surv(time, status1) ~ meal.cal + wt.loss + inst + age + sex, data = lung)
+fit.stepwise <- MASS::stepAIC(fit, direction = "both", scope=~ meal.cal + wt.loss + inst + age + sex + ph.ecog +
+              ph.karno + pat.karno)
+summary(fit.stepwise)
+AIC(fit.stepwise)
+```
+```{r}
+## stepwise selection (different function)
+fit <- coxph(Surv(time, status1) ~ meal.cal + wt.loss + inst + age + sex + ph.ecog +
+              ph.karno + pat.karno, data = lung)
+fit.stepwise <- stats::step(fit)
+AIC(fit.stepwise)
+```
+
+## Penalized Regression for survival data 
+This is a quick introduction lab to using penalized regression techniques for the Cox model. We can estimate $\hat{\beta}_{mle}$ through 
+
+$$
+\hat{\beta}_{mle} = \text{arg max}_{\beta} l(\beta), 
+$$
+where $l(\beta)$ is the log partial likelihood.
+
+### Simulate Data from a Cox model
+
+Here we will simulate data from an exponential model. We would first need to specify the values for ```true.beta```, the true value of the regression coefficients. For this example we let```true.beta = c(-0.5, 0.5, 0, 0, 0.7, -0.7, 0, 0, 0, 0, 0, 0, 0, 0, 0)```. Here the first, second, fifth, and sixth values are non-zero while the rest are zeros. A good variable selection technique should allow us to identify the zeros and nonzeros correctly. We simulate ```n=300``` observations with covariate matrix $X \sim MVN(0,\Sigma)$ with $\Sigma = (\sigma_{ij}) = 0.5^{|i-j|}$.
+
+Below is code to simulate our data with independent censoring.
+
+```{r}
+set.seed(123)
+true.beta <- c(-0.5, 0.5, 0, 0, 0.7, -0.7, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+n <- 300
+p <- length(true.beta)
+rho <- 0.5
+V <- matrix(0, ncol = p, nrow = p)
+for(index in 1:p){
+      V[index, ] <-
+        c(rev(cumprod(rep(rho, index - 1))), 1, cumprod(rep(rho, p - index)))
+}
+
+X <- matrix(rnorm(p*n, 0, 1), ncol = p)
+X <- X %*% chol(V)
+
+U <- runif(n, 0, 5)
+t <- rweibull(n, shape = 1, scale = exp(-X%*%true.beta))
+c <- rweibull(n, shape = 1, scale = U*exp(-X%*%true.beta))
+survtime <- pmin(t, c)
+delta <- (survtime == t); mean(delta)
+
+```
+
+### LASSO
+```{r}
+library(glmnet)
+cv.lasso   <- cv.glmnet(X, Surv(survtime, delta), alpha = 1, family = 'cox',
+                         nlambda = 100, nfolds = 10)
+  
+fit.lasso <- glmnet(X, Surv(t, delta), alpha = 1,  
+                    family = 'cox', lambda = cv.lasso$lambda.min)
+ 
+coef(fit.lasso)
+```
+
+### SCAD
+```{r}
+library(ncvreg)
+
+fit <- cv.ncvsurv(X, Surv(survtime, delta), penalty = 'SCAD',  
+                    nlambda = 10, nfolds = 10)
+fit.scad <- ncvsurv(X, Surv(survtime, delta), penalty = 'SCAD', 
+                    lambda = fit$lambda.min)
+coef(fit.scad)  
+```
+
+### CoxBAR
+```{r, eval=FALSE}
+install.packages("devtools")
+library(devtools)
+install_github("ohdsi/Cyclops") 
+install_github("ohdsi/BrokenAdaptiveRidge") 
+```
+
+```{r}
+library(BrokenAdaptiveRidge)
+dataFit  <- createCyclopsData(Surv(survtime, delta) ~ X, modelType = "cox")
+barPrior <- createBarPrior(penalty = log(n) / 2, initialRidgeVariance = 2) 
+fit.bar      <- fitCyclopsModel(dataFit, prior = barPrior)
+coef(fit.bar)
+```
+
+## Competing Risks Regression and Cumulative Incidence Analysis using cmprsk package
+
+Reference: https://cran.r-project.org/web/packages/cmprsk/cmprsk.pdf
+
+Fits the ’proportional subdistribution hazards’ regression model described in Fine and Gray (1999).
+This model directly assesses the effect of covariates on the subdistribution of a particular type of
+failure in a competing risks setting. The method implemented here is described in the paper as the
+weighted estimating equation.
+While the use of model formulas is not supported, the model.matrix function can be used to generate suitable matrices of covariates from factors, eg model.matrix(~factor1+factor2)[,-1] will
+generate the variables for the factor coding of the factors factor1 and factor2. The final [,-1]
+removes the constant term from the output of model.matrix.
+The basic model assumes the subdistribution with covariates z is a constant shift on the complementary log log scale from a baseline subdistribution function. This can be generalized by including
+interactions of z with functions of time to allow the magnitude of the shift to change with follow-up
+time, through the cov2 and tfs arguments. For example, if z is a vector of covariate values, and uft is
+a vector containing the unique failure times for failures of the type of interest (sorted in ascending
+order), then the coefficients a, b and c in the quadratic (in time) model $az + bzt + zt^2$
+can be fit by
+specifying cov1=z, cov2=cbind(z,z), tf=function(uft) cbind(uft,uft*uft).
+
+```{r, warning = FALSE}
+library("cmprsk")
+# simulated data to test
+set.seed(10)
+ftime <- rexp(200)
+fstatus <- sample(0:2,200,replace=TRUE)
+cov <- matrix(runif(600),nrow=200)
+dimnames(cov)[[2]] <- c('x1','x2','x3')
+print(z <- crr(ftime,fstatus,cov))
+summary(z)
+z.p <- predict(z,rbind(c(.1,.5,.8),c(.1,.5,.2)))
+plot(z.p,lty=1,color=2:3)
+crr(ftime,fstatus,cov,failcode=2)
+# quadratic in time for first cov
+crr(ftime,fstatus,cov,cbind(cov[,1],cov[,1]),function(Uft) cbind(Uft,Uft^2))
+```
+Function "cuminc" is for cumulative incidence analysis.
+```{r, warning = FALSE}
+set.seed(2)
+ss <- rexp(100)
+gg <- factor(sample(1:3,100,replace=TRUE),1:3,c('a','b','c'))
+cc <- sample(0:2,100,replace=TRUE)
+strt <- sample(1:2,100,replace=TRUE)
+print(xx <- cuminc(ss,cc,gg,strt, cencode = 0))
+plot(xx,lty=1,color=1:6)
+```
+
+### fastcmprsk 
+```{r,eval=FALSE}
+#### Need the following packages to run the examples in the paper
+install.packages("cmprsk")
+install.packages("crrp")
+install.packages("doParallel")
+install.packages("fastcmprsk")
+```
+
+Reference: https://journal.r-project.org/archive/2021/RJ-2021-010/RJ-2021-010.pdf
+
+```{r}
+## Run Fine-Gray model using fastcmprsk package
+library(fastcmprsk)
+set.seed(2019)
+N <- 500
+# Create coefficient vector for event of interest and competing event
+beta1 <- c(0.40, -0.40,  0, -0.50,  0,  0.60,  0.75,  0,  0, -0.80)
+beta2 <- -beta1
+# Simulate design matrix
+Z <- matrix(rnorm(N * length(beta1)), nrow = N)
+# Generate data
+dat   <- simulateTwoCauseFineGrayModel(N, beta1, beta2,
++        Z, u.min = 0, u.max = 1, p = 0.5)
+# Event counts (0 = censored; 1 = event of interest; 2 = competing event)
+table(dat$fstatus)
+# First 6 observed survival times
+head(dat$ftime)
+```
+
+```{r}
+vc <- varianceControl(B = 100, seed = 2019)
+fit3 <- fastcmprsk::fastCrr(Crisk(dat$ftime, dat$fstatus) ~ Z, variance = TRUE, 
+                            var.control = vc, returnDataFrame = TRUE)
+AIC(fit3, k = 2)
+logLik(fit3)
+
+# Alternative expression of the AIC
+-2 * logLik(fit3) + 2 * length(coef(fit3))
+
+# covariance matrix of coefficient estimates
+vcov(fit3)
+
+confint(fit3, level = 0.95) # 95 % Confidence intervals
+
+summary(fit3, conf.int = TRUE)
+```
+
+```{r}
+## Proceed parallel computation to speed up bootstrap
+# install.packages("doParallel")
+library(doParallel)
+n.cores <- 2 # No. of cores
+myClust <- makeCluster(n.cores)
+# Set useMultipleCores = TRUE to enable parallelization
+vc = varianceControl(B = 1000, useMultipleCores = TRUE)
+registerDoParallel(myClust)
+fit3 <- fastCrr(Crisk(dat$ftime, dat$fstatus) ~ Z, variance = TRUE, var.control = vc)
+stopCluster(myClust)
+```
+
+## Time-Dependent Covariates (Section 9.2)
+Covariates that are fixed-time covariates are those whose values are fixed throughout the course of the study. Some common examples include gender, age at study entry, and treatment group. However, there are covariates whose value may change over the course of the study. These are known are time-dependent covariates as their values depend on the time of observation. An example would be a covariate that takes on the value of 0 until some intermediate event (not the event of interest) occurs in which case the covariate would take on the value 1. 
+
+The basic Cox regression model can be written as
+$$h\{t|\mathbf{Z}(t)\} = h_0(t) \exp\{\boldsymbol{\beta}^T\mathbf{Z}(t)\}.$$
+
+Besides modeling these covariates correctly, under certain assumptions, a common use of time-dependent covariates include testing the proportional hazards assumption. If this assumption is violated, then a way of dealing with this issue would be to stratify on this variable. 
+
+When fitting these models into ```R```, one must first use ```survSplit``` to restructure the data into a counting process-like dataset.
+
+We will look at Example 9.1 on page 297.
+```{r}
+data(bmt)
+head(bmt)
+nrow(bmt)
+#For consistency we will be using the variables that are defined in the book.
+bmt$Z1 <- ifelse(bmt$group == 2, 1, 0)
+bmt$Z2 <- ifelse(bmt$group == 3, 1, 0)
+
+cut.points <- unique(bmt$t2[bmt$d3 == 1]) #What does this do?
+length(cut.points)
+sort(cut.points)
+
+#Converting dataset
+bmt2 <- survSplit(data = bmt, cut = cut.points, end = "t2", start = 't0', event = "d3")
+head(bmt2)
+nrow(bmt2)
+
+#Create time-dependent covariates 
+bmt2$tdc_tA <- ifelse(bmt2$t2 >= bmt2$ta & bmt2$da == 1, 1, 0)
+bmt2$tdc_tP <- ifelse(bmt2$t2 >= bmt2$tp & bmt2$dp == 1, 1, 0)
+bmt2$tdc_tC <- ifelse(bmt2$t2 >= bmt2$tc & bmt2$dc == 1, 1, 0)
+
+#Table 9.1
+coxph(Surv(t0, t2, d3) ~ Z1 + Z2 + tdc_tA, data = bmt2, ties = 'breslow')
+coxph(Surv(t0, t2, d3) ~ Z1 + Z2 + tdc_tC, data = bmt2, ties = 'breslow')
+coxph(Surv(t0, t2, d3) ~ Z1 + Z2 + tdc_tP, data = bmt2, ties = 'breslow')
+```
+The only significant time-dependent covariate is time at which platelets recovered. The negative coefficient suggests that, at a given time $t$, a patient whose platelets have recovered has a *better* chance of survival than a patient whose platelets have not yet recovered.
+
+The relative risk of $\exp(-1.1297) =  0.323$ suggests that the rate at which patients are disease free *after* their platelets recovered is close to one-third the rate *prior to the time* at which their platelets recovered.
+
+Now we will continue the model building process by incorporating this time-dependent covariate into our study. 
+
+```{r}
+#Table 9.2
+bmt2$Z3 <- bmt2$z8
+bmt2$Z4 <- bmt2$z1 - 28
+bmt2$Z5 <- bmt2$z2 - 28
+bmt2$Z6 <- bmt2$Z4 * bmt2$Z5
+
+#Table 9.2
+coxph(Surv(t0, t2, d3) ~ 
+        Z1 + Z2 + Z3 + Z4 + Z5 + Z6, data = bmt2, 
+      ties = 'breslow') #Only time-fixed factors
+coxph(Surv(t0, t2, d3) ~ 
+        Z1 + Z2 + tdc_tP, 
+      data = bmt2, ties = 'breslow') #Only time-depenent factor
+coxph(Surv(t0, t2, d3) ~ 
+        Z1 + Z2 + Z3 + Z4 + Z5 + Z6+ tdc_tP, 
+      data = bmt2, ties = 'breslow') #All factors
+```
+
+## Stratified Cox Model (Section 9.3)
+Stratified Cox models are easy to implement in R.
+We have shown previously that patients who where given MTX as a GVH prophylactic did not have hazard rates proportional to those patients not given MTX. One way we can deal with this problem is to stratify based on MTX.
+A crucial assumption for using a stratified proportional hazards model is that the covariates are acting similarly on the baseline hazard function, $h_{0j}(t)$ for all j stratum. This can be validated through a likelihood ratio test or Wald test by fitting separate models per stratum. Below is a code for the likelihood ratio test using the bmt example.
+```{r}
+ #Table 9.7
+fit <- coxph(Surv(t0, t2, d3) ~ Z1 + Z2 + Z3 + Z4 + Z5 + Z6 + tdc_tP + strata(z10), data = bmt2, ties = 'breslow')
+bmtMTX0 <- bmt2[bmt2$z10 == 0, ] 
+bmtMTX1 <- bmt2[bmt2$z10 == 1, ]
+fit0 <- coxph(Surv(t0, t2, d3) ~ Z1 + Z2 + Z3 + Z4 + Z5 + Z6 + tdc_tP, data = bmtMTX0, ties = 'breslow')
+fit1 <- coxph(Surv(t0, t2, d3) ~ Z1 + Z2 + Z3 + Z4 + Z5 + Z6 + tdc_tP, data = bmtMTX1, ties = 'breslow')
+X2 <- -2*(fit$loglik[2] - (fit0$loglik[2] + fit1$loglik[2])); X2
+## [1] 6.089948
+1 - pchisq(X2, 7) #7 degrees of freedom for each covariate ## [1] 0.5292867
+```
+Hence, we have no evidence that the covariate effects are different between the two strata. Likewise, one may perform multiple one-degree-of-freedom Wald tests on each covariate between the two strata.
+```{r}
+ #Table 9.8 (Only looking at Z1)
+W <- (fit1$coefficients[1] - fit0$coefficients[1])^2 / (fit1$var[1,1] + fit0$var[1,1])
+```
+
+```{r}
+1 - pchisq(W, 1) #p-value ## Z1
+```
+We can repeat this for each covariate. It turns out that for this example there is no reason to suspect that the β affect the two strata differently and can conclude that the stratified model is appropriate.
+
+## Obtain the estimated cumulative hazard for each stratum
+```{r}
+library(dplyr)
+library(zoo)
+data(larynx)
+fit3 = basehaz(coxph(Surv(time,delta) ~ age + strata(factor(stage)), data = larynx,
+                     ties = 'breslow'), centered = TRUE)
+#Extract data frames for each stratum
+stage1 <- data.frame(
+  "H1" = fit3$hazard[fit3$strata == 1],
+  "time" = fit3$time[fit3$strata == 1])
+stage2 <- data.frame(
+  "H2" = fit3$hazard[fit3$strata == 2],
+  "time" = fit3$time[fit3$strata == 2])
+stage3 <- data.frame(
+  "H3" = fit3$hazard[fit3$strata == 3],
+  "time" = fit3$time[fit3$strata == 3])
+stage4 <- data.frame(
+  "H4" = fit3$hazard[fit3$strata == 4],
+  "time" = fit3$time[fit3$strata == 4])
+
+join1 <- full_join(stage1, stage2, by = "time")
+join2 <- full_join(join1, stage3, by = "time")
+join3 <- full_join(join2, stage4, by = "time") %>%
+  arrange(time) %>%
+  do(na.locf(.))
+
+plot(log(join3$H1) ~ join3$time, type = 's',
+     ylab = 'Log Cumulative Hazard', xlab = 'Time', main = 'Log H(t) vs. Time', col = "orange", lty = 1, ylim = c(-3.5, 0))
+```
+
+## Testing the Proportional Hazards Assumption
+
+To test the proportional hazards assumption, we can artificially create a time-depndent covariate, $Z_2(t)$ for the fixed-time covariate of interest, $Z_1$.
+That is, $Z_2(t) = Z_1 \times g(t)$, where $g(t)$ is a known function of $t$ (time). Most commonly, $g(t) = \log(t)$. A test of $H_0: \beta_2 = 0$ is a test for the proportional hazards assumption. 
+
+```{r}
+library(survival)  # loading survival functions into R
+library(KMsurv)    # datasets from Klein and Moeschberger textbook
+data(bmt)
+#Checking Proportional Hazards Assumption (Table 9.5)
+rm(bmt)
+data(bmt)
+#For consistency we will be using the variables that are defined in the book.
+bmt$Z1 <- ifelse(bmt$group == 2, 1, 0)
+bmt$Z2 <- ifelse(bmt$group == 3, 1, 0)
+
+cut.points <- unique(bmt$t2[bmt$d3 == 1]) #What does this do?
+
+bmt3     <- survSplit(data = bmt, cut = cut.points, end = "t2", start = "t0", event = "d3")
+bmt3$Z3  <- bmt3$z7
+bmt3$Z4  <- bmt3$z8
+bmt3$Z5  <- bmt3$z10
+bmt3$Z6  <- bmt3$z4
+bmt3$Z7  <- bmt3$z3
+bmt3$Z8  <- bmt3$Z6 * bmt3$Z7
+bmt3$Z9  <- bmt3$z6
+bmt3$Z10 <- bmt3$z5
+bmt3$Z11 <- bmt3$Z9 * bmt3$z10
+bmt3$Z12 <- bmt3$z2 - 28
+bmt3$Z13 <- bmt3$z1 - 28
+bmt3$Z14 <- bmt3$Z12 * bmt3$Z13
+bmt3$Z15 <- bmt3$Z1 * log(bmt3$t2)
+bmt3$Z16 <- bmt3$Z2 * log(bmt3$t2)
+bmt3$Z17 <- bmt3$Z3 * log(bmt3$t2)
+bmt3$Z18 <- bmt3$Z4 * log(bmt3$t2)
+bmt3$Z19 <- bmt3$Z5 * log(bmt3$t2)
+bmt3$Z20 <- bmt3$Z6 * log(bmt3$t2)
+bmt3$Z21 <- bmt3$Z7 * log(bmt3$t2)
+bmt3$Z22 <- bmt3$Z8 * log(bmt3$t2)
+bmt3$Z23 <- bmt3$Z9 * log(bmt3$t2)
+bmt3$Z24 <- bmt3$Z10 * log(bmt3$t2)
+bmt3$Z25 <- bmt3$Z11 * log(bmt3$t2)
+bmt3$Z26 <- bmt3$Z12 * log(bmt3$t2)
+bmt3$Z27 <- bmt3$Z13 * log(bmt3$t2)
+bmt3$Z28 <- bmt3$Z14 * log(bmt3$t2)
+
+fit <- coxph(Surv(t0, t2, d3) ~ Z1 + Z2 + Z15 + Z16, data = bmt3, ties = 'breslow')
+
+#Perform Wald Test for proportional hazards w.r.t Group
+C  <- rbind(c(0, 0, 1, -1), c(0, 0, 0, 1))
+b0 <- c(0, 0, 0, 0)
+b  <- fit$coefficients
+V  <- fit$var
+1 - pchisq(t(C %*% b - C %*% b0) %*% solve(C %*% V %*% t(C)) %*% (C %*% b - C %*% b0), 2)
+
+#Testing proportional hazards for MTX
+coxph(Surv(t0, t2, d3) ~ Z5 + Z19, data = bmt3, ties = 'breslow')
+```
+
+Here is another example using the ```kidney``` dataset.
+
+```{r}
+#Example 9.2 (pg. 303)
+data(kidney, library  = "KMsurv")
+
+event.times <- sort(unique(kidney$time[kidney$delta == 1]))
+kidney2 <- survSplit(data = kidney, cut = event.times, end = "time", start = "t0", event = "delta")
+kidney2$type = ifelse(kidney2$type == 2, 1, 0)
+
+kidney2$tdc <- kidney2$type * log(kidney2$time)
+
+coxph(Surv(t0, time, delta) ~ type + tdc, data = kidney2, ties = 'breslow')
+```
+
+Hence, we can see that the hazards are not proportional (p-value $<$ .05). For binary covariates, one way we can fix the problem of non-proportional hazards is through a 'change' point method. This allows $g(t)$ to be estimated from the data by using an indicator function. That is, $Z_2(t) = Z_1$ if $t > \tau$ and 0 for $t \leq \tau$. Determining the value of $\tau$ comes from fitting multiple models with different values of $\tau$ and finding the model with the largest log partial likelihood. Observed event times are used as candidates for $\tau$.
+
+```{r, warning = FALSE}
+#Pg. 306
+loglik <- as.numeric(length(event.times))
+
+#Warnings may occur due to X being singular. (that is a problem with this method)
+for(i in 1:length(event.times)){
+  kidney2$tdc1 <- ifelse(kidney2$time > event.times[i], kidney2$type, 0)
+  fit <- coxph(Surv(t0, time, delta) ~ type + tdc1, data = kidney2, ties = 'breslow')
+  loglik[i] <- fit$loglik[2]
+}
+
+cbind(event.times, loglik)
+opt_tau <- event.times[which.max(loglik)]
+opt_tau
+```
+In this example, 3.5 months is the value if $\tau$ that maximizes the log partial likelihood. We now create a pair of time-dependent covariates using 3.5 months as a cutoff.
+
+```{r}
+kidney2$Z2 <- ifelse(kidney2$time > opt_tau, kidney2$type, 0)
+kidney2$Z3 <- ifelse(kidney2$time <= opt_tau, kidney2$type, 0)
+
+fit <- coxph(Surv(t0, time, delta) ~  Z2 + Z3, data = kidney2, ties = 'breslow')
+summary(fit)
+```
+
+## Graphical Methods to Assess Model Fit for Cox Models (Section 11)
+
+### Cox-Snell Residuals (Section 11.2)
+Cox-Snell residuals are used for assuming the fit of a Cox model. If the model was correct and the estimated regression coefficients $\hat{\beta}$ are close to the true values of $\beta$, then the Cox-Snell residuals follow a unit exponential distribution. Below is an example of how to implement the Cox-Snell residuals in ```R``` using Example 11.1 on page 355. It turns out that the Cox-Snell residuals are not stored in the ```resid``` function for ```R```. However, we can use the Martingale residuals, discussed later, as a way to get the Cox-Snell residuals.
+
+The Cox-Snell residual for subject $i$ is defined as
+$$
+r_i = \hat{H}_0(t_i) * \exp\{\mathbf{x}_i(t_i)^T\beta\}, 
+$$
+
+where $\hat{H}_0(t_i)$ is Breslow's estimator for the cumulative hazard function defined earlier.
+
+We shall check the fit of a model for disease-free survival following a bone marrow transplantation. 
+```{r, fig.align = 'center'}
+#Example 11.1
+data(bmt)
+bmt.11    <- bmt
+bmt.11$Z1 <- bmt.11$z1 - 28 #Center at 28 yeats
+bmt.11$Z2 <- bmt.11$z2 - 28
+bmt.11$Z3 <- bmt.11$Z1 * bmt.11$Z2
+bmt.11$Z4 <- ifelse(bmt.11$group == 2, 1, 0)
+bmt.11$Z5 <- ifelse(bmt.11$group == 3, 1, 0)
+bmt.11$Z6 <- bmt.11$z8
+bmt.11$Z7 <- bmt.11$z7/30 - 9
+bmt.11$Z8 <- bmt.11$z10
+
+#Fit the model
+fit.11 <- coxph(Surv(t2,d3) ~ Z1 + Z2 + Z3 + 
+                  Z4 + Z5 + Z6 + Z7 + Z8, data = bmt.11, 
+                method = 'breslow')
+
+#Get Cox-Snell residual based on Martingale residuals
+mg.residual <- resid(fit.11, type = "martingale")
+cs.residual <- bmt.11$d3 - mg.residual
+
+#Graphical Plot
+fit.cs <- survfit(Surv(cs.residual, bmt.11$d3) ~ 1) #Get Kaplan-Meier estiamtes
+H.cs   <- cumsum(fit.cs$n.event/fit.cs$n.risk)
+plot(fit.cs$time, H.cs, type='s', col='blue', 
+     main = 'Cox-Snell Residual Plot \n MTX as Fixed-Time Covariate', 
+     xlab = 'Residual', ylab = 'Nelson-Aalen Cum. Hazard') 
+#Note here that 'time' is the value of the Cox-Snell residual
+abline(0, 1, col='red',  lty = 2)
+
+```
+If the Cox model that we fit was appropriate, then the plot should follow a 45∘
+ line. Looking at the plot above, the model does not fit too badly. However, we have also showed stratification on MTX may be more appropriate. Hence, we can also draw Cox-Snell residual plots on these two models and see if the fit is better.
+ 
+## Martingale Residuals (Section 11.3)
+Martingale residuals are generally used to determine the functional form of a covariate (think of component plus residual plots for linear regression). Martingale residuals have the property of being mean 0 and uncorrelated for large samples. To determine the functional form of the covariate, we would plot the Martingale residuals versus the covariate of interest. We will use Example 11.2 to illustrate this.
+
+```{r}
+data(hodg)
+fit.mg <- coxph(Surv(time,delta) ~ wtime + factor(dtype) + factor(gtype) + score, data=hodg, ties = 'breslow')
+mg.resid <- resid(fit.mg, type = 'martingale') #Default is Martingale
+plot(mg.resid ~ hodg$wtime,
+     xlab = "Waiting Time to Transplant (months)", ylab = "Martingale Residuals",
+    main='Martingale Residuals vs. Time to Transplant', pch = 19)
+lines(lowess(hodg$wtime, mg.resid), col = 'red')
+```
+
+We can see that at around 50 months, the LOESS curve decreases linearly and then levels off. This is suggestive of coding wating time as an indicator variable.
+
+## Graphical Check for Proportional Hazards
+Besides using time-dependent covariates to check the proportionality assumption, graphical methods are also available.
+
+The first method is to stratify on the covariate of interest and plot the log estimated baseline cumulative hazard rates for each strata against time. If the proportionality assumption holds, then the plots should be close to parallel for each strata.
+
+```{r}
+data(alloauto)
+fit3 = basehaz(coxph(Surv(time,delta)~strata(factor(type)), data = alloauto, ties = 'breslow'))
+
+plot(log(fit3$hazard[fit3$strata == 1])~ fit3$time[fit3$strata == 1], type = 's',
+     ylab = 'Log Cumulative Hazard', xlab = 'Time', main = 'Log H(t) vs. Time',
+     col = 'blue', lty = 1, xlim = c(0, 25), ylim = c(-4, 0))
+lines(log(fit3$hazard[fit3$strata == 2]) ~  fit3$time[fit3$strata == 2],
+      col = 'red', lty = 2, type = 's')
+legend('bottomright', c('Allo', 'Auto'), col = c('blue', 'red'), lty = c(1, 2),
+       bty = 'n')
+```
+
+We can see that hte baseline hazards are not parallel for the two types which is suggestive of non-proportional hazards. We also validated this above through the use of time-dependent covariates.
+
+Another method is to use the Anderson plot. Here we plot two stratified log baseline hazards against each other. If the proportionality assumption holds, then the line should be straight through the origin. In otherwords, if
+
+$$
+H_{g0}(t) = \exp{\gamma_g} H_{10}(t), 
+$$
+then the slope would be a crude estimate of $\exp(\gamma_g)$.
+```{r}
+reptime <- function(l, t){
+  x <- numeric(max(t))
+  for(i in min(t):max(t)){
+    diff <- i - t
+    diff <- diff[diff >= 0]
+    x[i] <- l[which.min(diff)]
+  }
+  return(x)
+}
+
+H1 <- fit3$hazard[fit3$strata == 1]
+H2 <- fit3$hazard[fit3$strata == 2]
+t1 <- fit3$time[fit3$strata == 1]
+t2 <- fit3$time[fit3$strata == 2]
+
+H1 <- reptime(H1, t1)
+H2 <- reptime(H2, t2)
+
+plot(H2[1:47] ~ H1[1:47], main = 'Anderson Plot', ylab = 'Auto Transplant', xlab = 'Allo Transplant', type = 's', xlim = c(0, 1), ylim = c(0, 1))
+abline(0, 1, col='red',  lty=2)
+```
